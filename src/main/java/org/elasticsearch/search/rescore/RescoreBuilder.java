@@ -34,6 +34,10 @@ public class RescoreBuilder implements ToXContent {
         return new QueryRescorer(queryBuilder);
     }
 
+    public static RescoreBuilder.Rescorer hitGroupPositionRescorer(String groupField, String boostScript) {
+        return new HitGroupPositionRescorer(groupField, boostScript);
+    }
+
     public RescoreBuilder rescorer(Rescorer rescorer) {
         this.rescorer = rescorer;
         return this;
@@ -131,6 +135,30 @@ public class RescoreBuilder implements ToXContent {
             if (scoreMode != null) {
                 builder.field("score_mode", scoreMode);
             }
+            return builder;
+        }
+    }
+
+    public static class HitGroupPositionRescorer extends RescoreBuilder.Rescorer {
+        private static final String NAME = "hit_group_position";
+        private String groupField;
+        private String boostScript;
+
+        /**
+         * Creates a new {@link QueryRescorer} instance
+         * @param groupField the field to group by
+         * @param boostScript the script to calculate boost factor
+         */
+        public HitGroupPositionRescorer(String groupField, String boostScript) {
+            super(NAME);
+            this.groupField = groupField;
+            this.boostScript = boostScript;
+        }
+
+        @Override
+        protected XContentBuilder innerToXContent(XContentBuilder builder, Params params) throws IOException {
+            builder.field("group_field", groupField);
+            builder.field("boost_script", boostScript);
             return builder;
         }
     }
