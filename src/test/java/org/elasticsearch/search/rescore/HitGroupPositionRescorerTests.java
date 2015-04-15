@@ -50,13 +50,20 @@ public class HitGroupPositionRescorerTests extends ElasticsearchIntegrationTest 
 
         client().prepareIndex("test", "product", "1")
             .setSource("name", "the quick brown fox", "company_id", 1)
-            .execute().actionGet();
+            .execute()
+            .actionGet();
         client().prepareIndex("test", "product", "2")
             .setSource("name", "the quick lazy huge fox jumps over the tree", "company_id", 2)
-            .execute().actionGet();
+            .execute()
+            .actionGet();
         client().prepareIndex("test", "product", "3")
             .setSource("name", "quick huge brown fox", "description", "the quick lazy huge brown fox jumps over the tree", "company_id", 1)
-            .get();
+            .execute()
+            .actionGet();
+        client().prepareIndex("test", "product", "4")
+            .setSource("name", "the quick lonely fox")
+            .execute()
+            .actionGet();
         ensureYellow();
         refresh();
 
@@ -68,10 +75,8 @@ public class HitGroupPositionRescorerTests extends ElasticsearchIntegrationTest 
             .setQuery(queryBuilder)
             .execute()
             .actionGet();
-        assertHitCount(searchResponse, 3);
-        assertFirstHit(searchResponse, hasId("1"));
-        assertSecondHit(searchResponse, hasId("3"));
-        assertThirdHit(searchResponse, hasId("2"));
+        assertHitCount(searchResponse, 4);
+        assertOrderedSearchHits(searchResponse, "1", "3", "4", "2");
 
         // With rescoring
         searchResponse = client().prepareSearch()
@@ -80,9 +85,28 @@ public class HitGroupPositionRescorerTests extends ElasticsearchIntegrationTest 
             .setRescoreWindow(5)
             .execute()
             .actionGet();
-        assertHitCount(searchResponse, 3);
-        assertFirstHit(searchResponse, hasId("1"));
-        assertSecondHit(searchResponse, hasId("2"));
-        assertThirdHit(searchResponse, hasId("3"));
+        assertHitCount(searchResponse, 4);
+        assertOrderedSearchHits(searchResponse, "1", "4", "2", "3");
+
+        // Small size
+        searchResponse = client().prepareSearch()
+            .setQuery(queryBuilder)
+            .setSize(2)
+            .setRescorer(RescoreBuilder.hitGroupPositionRescorer("company_id", "1 / (_pos + 1)"))
+            .setRescoreWindow(5)
+            .execute()
+            .actionGet();
+        assertHitCount(searchResponse, 4);
+        assertOrderedSearchHits(searchResponse, "1", "4");
+
+        // Small rescoring window
+        searchResponse = client().prepareSearch()
+            .setQuery(queryBuilder)
+            .setRescorer(RescoreBuilder.hitGroupPositionRescorer("company_id", "1 / (_pos + 1)"))
+            .setRescoreWindow(3)
+            .execute()
+            .actionGet();
+        assertHitCount(searchResponse, 4);
+        assertOrderedSearchHits(searchResponse, "1", "4", "3", "2");
     }
 }

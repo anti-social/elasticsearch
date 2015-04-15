@@ -20,6 +20,7 @@
 package org.elasticsearch.search.rescore;
 
 import java.io.IOException;
+import java.lang.Math;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
@@ -32,6 +33,7 @@ import java.util.Set;
 import org.apache.lucene.index.AtomicReaderContext;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.util.BytesRef;
+import org.apache.lucene.util.BytesRefBuilder;
 import org.apache.lucene.util.CollectionUtil;
 import org.apache.lucene.search.Explanation;
 import org.apache.lucene.search.ScoreDoc;
@@ -50,10 +52,10 @@ import org.elasticsearch.search.internal.SearchContext;
 
 public class HitGroupPositionRescorer implements Rescorer {
 
-    public static final Rescorer INSTANCE = new HitGroupPositionRescorer();
-    public static final String NAME = "hit_group_position";
+    public final static Rescorer INSTANCE = new HitGroupPositionRescorer();
+    public final static String NAME = "hit_group_position";
 
-    private final ESLogger logger;
+    private final static ESLogger logger = Loggers.getLogger(HitGroupPositionRescorer.class);
 
     private final static Comparator<ScoreDoc> DOC_COMPARATOR = new Comparator<ScoreDoc>() {
         @Override
@@ -75,10 +77,6 @@ public class HitGroupPositionRescorer implements Rescorer {
         }
     };
 
-    public HitGroupPositionRescorer() {
-        this.logger = Loggers.getLogger(HitGroupPositionRescorer.class);
-    }
-
     @Override
     public String name() {
         return NAME;
@@ -93,8 +91,9 @@ public class HitGroupPositionRescorer implements Rescorer {
 
         final HitGroupPositionRescoreContext rescoreCtx = (HitGroupPositionRescoreContext) rescoreContext;
 
-        TopDocs topNFirstPass = topN(topDocs, rescoreContext.window());
-        Arrays.sort(topNFirstPass.scoreDocs, DOC_COMPARATOR);
+        ScoreDoc[] hits = topDocs.scoreDocs;
+        int windowSize = Math.min(rescoreCtx.window(), hits.length);
+        Arrays.sort(hits, 0, windowSize, DOC_COMPARATOR);
 
         List<AtomicReaderContext> readerContexts = context.searcher().getIndexReader().leaves();
         Iterator<AtomicReaderContext> readerContextIterator = readerContexts.iterator();
@@ -103,13 +102,16 @@ public class HitGroupPositionRescorer implements Rescorer {
         FieldMapper mapper = context.smartNameFieldMapper(rescoreCtx.groupField);
         SortedBinaryDocValues fieldValues = context.fieldData().getForField(mapper).load(currentReaderContext).getBytesValues();
 
-        Map<BytesRef,List<ScoreDoc>> groupedDocs = new HashMap<BytesRef,List<ScoreDoc>>();
+        final Map<Integer,BytesRef> groupValues = new HashMap<Integer,BytesRef>();
         Map<Integer,AtomicReaderContext> docLeafContexts = new HashMap<Integer,AtomicReaderContext>();
 
-        for (ScoreDoc hit : topNFirstPass.scoreDocs) {
+        BytesRefBuilder valueBuilder = new BytesRefBuilder();
+
+        for (int hitIx = 0; hitIx < windowSize; hitIx++) {
+            ScoreDoc hit = hits[hitIx];
             AtomicReaderContext prevReaderContext = currentReaderContext;
                 
-            // find segment with current document
+            // find segment that contains current document
             int docId = hit.doc - currentReaderContext.docBase;
             while (docId >= currentReaderContext.reader().maxDoc()) {
                 currentReaderContext = readerContextIterator.next();
@@ -123,53 +125,52 @@ public class HitGroupPositionRescorer implements Rescorer {
             }
 
             fieldValues.setDocument(docId);
-            BytesRef val = fieldValues.valueAt(0);
-            if (!groupedDocs.containsKey(val)) {
-                groupedDocs.put(val, new ArrayList<ScoreDoc>());
+
+            if (fieldValues.count() == 0) {
+                valueBuilder.clear();
+            } else {
+                valueBuilder.copyBytes(fieldValues.valueAt(0));
             }
-            groupedDocs.get(val).add(hit);
+            groupValues.put(hit.doc, valueBuilder.toBytesRef());
         }
 
-        ScoreDoc[] rescoredHits = new ScoreDoc[topNFirstPass.scoreDocs.length];
-        Map<AtomicReaderContext,Map<Integer,Integer>> docPositions = new HashMap<AtomicReaderContext,Map<Integer,Integer>>();
-        for (List<ScoreDoc> docs : groupedDocs.values()) {
-            CollectionUtil.timSort(docs, SCORE_DOC_COMPARATOR);
-
-            int pos = 0;
-            for (ScoreDoc doc : docs) {
-                AtomicReaderContext leafContext = docLeafContexts.get(doc.doc);
-                if (!docPositions.containsKey(leafContext)) {
-                    docPositions.put(leafContext, new HashMap<Integer,Integer>());
+        // Sort by group value
+        Arrays.sort(hits, 0, windowSize, new Comparator<ScoreDoc>() {
+            @Override
+            public int compare(ScoreDoc a, ScoreDoc b) {
+                int cmp = groupValues.get(a.doc).compareTo(groupValues.get(b.doc));
+                if (cmp == 0) {
+                    return SCORE_DOC_COMPARATOR.compare(a, b);
                 }
-                docPositions.get(leafContext).put(doc.doc - leafContext.docBase, pos);
-                pos++;
+                return cmp;
             }
-        }
+        });
 
+        // Calculate new scores
+        int pos = 0;
+        BytesRef curGroupValue = null, prevGroupValue = null;
         SearchScript boostScript = rescoreCtx.boostScript;
-        int i = 0;
-        for (List<ScoreDoc> docs : groupedDocs.values()) {
-            for (ScoreDoc doc : docs) {
-                AtomicReaderContext leafContext = docLeafContexts.get(doc.doc);
-                int docId = doc.doc - leafContext.docBase;
-                boostScript.setNextReader(leafContext);
-                boostScript.setNextDocId(docId);
-                boostScript.setNextVar("_pos", docPositions.get(leafContext).get(docId));
-                float newScore = doc.score * boostScript.runAsFloat();
-                rescoredHits[i] = new ScoreDoc(doc.doc, newScore);
-                i++;
+        for (int i = 0; i < windowSize; i++) {
+            ScoreDoc hit = hits[i];
+            curGroupValue = groupValues.get(hit.doc);
+            if (!curGroupValue.equals(prevGroupValue)) {
+                pos = 0;
             }
+
+            AtomicReaderContext leafContext = docLeafContexts.get(hit.doc);
+            boostScript.setNextReader(leafContext);
+            boostScript.setNextDocId(hit.doc - leafContext.docBase);
+            boostScript.setNextVar("_pos", pos);
+            hit.score = hit.score * boostScript.runAsFloat();
+
+            pos++;
+            prevGroupValue = curGroupValue;
         }
 
-        Arrays.sort(rescoredHits, SCORE_DOC_COMPARATOR);
+        // Sort by new score
+        Arrays.sort(hits, 0, windowSize, SCORE_DOC_COMPARATOR);
 
-        if (rescoreCtx.window() < topNFirstPass.scoreDocs.length) {
-            ScoreDoc[] subset = new ScoreDoc[rescoreCtx.window()];
-            System.arraycopy(rescoredHits, 0, subset, 0, rescoreCtx.window());
-            rescoredHits = subset;
-        }
-            
-        return new TopDocs(topDocs.totalHits, rescoredHits, rescoredHits[0].score);
+        return new TopDocs(topDocs.totalHits, hits, hits[0].score);
     }
 
     @Override
@@ -210,7 +211,6 @@ public class HitGroupPositionRescorer implements Rescorer {
         
         String scriptLang = null;
         ScriptService.ScriptType scriptType = ScriptService.ScriptType.INLINE;
-        logger.info(context.scriptService().toString());
         SearchScript searchScript = context.scriptService().search(context.lookup(), scriptLang, boostScript, scriptType, params);
         
         return new HitGroupPositionRescoreContext(this, groupField, searchScript);
@@ -218,18 +218,6 @@ public class HitGroupPositionRescorer implements Rescorer {
 
     @Override
     public void extractTerms(SearchContext context, RescoreSearchContext rescoreContext, Set<Term> termsSet) {
-    }
-
-    private TopDocs topN(TopDocs in, int topN) {
-        if (in.totalHits < topN) {
-            assert in.scoreDocs.length == in.totalHits;
-            return in;
-        }
-
-        ScoreDoc[] subset = new ScoreDoc[topN];
-        System.arraycopy(in.scoreDocs, 0, subset, 0, topN);
-
-        return new TopDocs(in.totalHits, subset, in.getMaxScore());
     }
 
     public static class HitGroupPositionRescoreContext extends RescoreSearchContext {
