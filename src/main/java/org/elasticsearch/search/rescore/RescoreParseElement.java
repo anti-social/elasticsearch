@@ -49,9 +49,13 @@ public class RescoreParseElement implements SearchParseElement {
         while ((token = parser.nextToken()) != XContentParser.Token.END_OBJECT) {
             if (token == XContentParser.Token.FIELD_NAME) {
                 fieldName = parser.currentName();
+                Rescorer rescorer = null;
                 if (QueryRescorer.NAME.equals(fieldName)) {
-                    // we only have one at this point
-                    Rescorer rescorer = QueryRescorer.INSTANCE;
+                    rescorer = QueryRescorer.INSTANCE;
+                } else if (HitGroupPositionRescorer.NAME.equals(fieldName)) {
+                    rescorer = HitGroupPositionRescorer.INSTANCE;
+                }
+                if (rescorer != null) {
                     token = parser.nextToken();
                     if (token != XContentParser.Token.START_OBJECT) {
                         throw new ElasticsearchParseException("rescore type malformed, must start with start_object");
@@ -62,7 +66,7 @@ public class RescoreParseElement implements SearchParseElement {
                 if ("window_size".equals(fieldName)) {
                     windowSize = parser.intValue();
                 } else {
-                    throw new ElasticsearchIllegalArgumentException("rescore doesn't support [" + fieldName + "]");
+                    throw new ElasticsearchIllegalArgumentException("rescore0 doesn't support [" + fieldName + "]");
                 }
             }
         }
