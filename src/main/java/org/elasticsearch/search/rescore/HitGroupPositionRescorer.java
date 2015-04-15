@@ -182,10 +182,13 @@ public class HitGroupPositionRescorer implements Rescorer {
 
     @Override
     public RescoreSearchContext parse(XContentParser parser, SearchContext context) throws IOException {
+        // Supports only groovy scripts
+
         Token token;
         String currentName = null;
-        String groupField = null, boostScript = null;
-        Map<String, Object> params = null;
+        String groupField = null, script = null, scriptLang = null;
+        ScriptService.ScriptType scriptType = ScriptService.ScriptType.INLINE;
+        Map<String, Object> scriptParams = null;
         while ((token = parser.nextToken()) != XContentParser.Token.END_OBJECT) {
             if (token == XContentParser.Token.FIELD_NAME) {
                 currentName = parser.currentName();
@@ -193,9 +196,16 @@ public class HitGroupPositionRescorer implements Rescorer {
                 if ("group_field".equals(currentName)) {
                     groupField = parser.text();
                 } else if ("boost_script".equals(currentName)) {
-                    boostScript = parser.text();
-                } else if ("params".equals(currentName)) {
-                    params = parser.map();
+                    script = parser.text();
+                    scriptType = ScriptService.ScriptType.INLINE;
+                } else if ("boost_script_id".equals(currentName)) {
+                    script = parser.text();
+                    scriptType = ScriptService.ScriptType.INDEXED;
+                } else if ("boost_script_file".equals(currentName)) {
+                    script = parser.text();
+                    scriptType = ScriptService.ScriptType.FILE;
+                } else if ("boost_script_params".equals(currentName)) {
+                    scriptParams = parser.map();
                 } else {
                     throw new ElasticsearchIllegalArgumentException("hit_group_position rescore doesn't support [" + currentName + "]");
                 }
@@ -205,15 +215,13 @@ public class HitGroupPositionRescorer implements Rescorer {
         if (groupField == null) {
             throw new ElasticsearchIllegalArgumentException("Must specify group_field for hit_group_position rescore ");
         }
-        if (boostScript == null) {
+        if (script == null) {
             throw new ElasticsearchIllegalArgumentException("Must specify boost_script for hit_group_position rescore ");
         }
         
-        String scriptLang = null;
-        ScriptService.ScriptType scriptType = ScriptService.ScriptType.INLINE;
-        SearchScript searchScript = context.scriptService().search(context.lookup(), scriptLang, boostScript, scriptType, params);
+        SearchScript boostScript = context.scriptService().search(context.lookup(), scriptLang, script, scriptType, scriptParams);
         
-        return new HitGroupPositionRescoreContext(this, groupField, searchScript);
+        return new HitGroupPositionRescoreContext(this, groupField, boostScript);
     }
 
     @Override
