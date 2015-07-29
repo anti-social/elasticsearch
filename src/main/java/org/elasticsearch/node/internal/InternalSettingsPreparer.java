@@ -44,14 +44,14 @@ public class InternalSettingsPreparer {
 
     static final List<String> ALLOWED_SUFFIXES = ImmutableList.of(".yml", ".yaml", ".json", ".properties");
 
-    public static final String SECRET_PROMPT_VALUE = "${prompt::secret}";
-    public static final String TEXT_PROMPT_VALUE = "${prompt::text}";
+    public static final String SECRET_PROMPT_VALUE = "${prompt.secret}";
+    public static final String TEXT_PROMPT_VALUE = "${prompt.text}";
     public static final String IGNORE_SYSTEM_PROPERTIES_SETTING = "config.ignore_system_properties";
 
     /**
      * Prepares the settings by gathering all elasticsearch system properties, optionally loading the configuration settings,
-     * and then replacing all property placeholders. This method will not work with settings that have <code>__prompt__</code>
-     * as their value unless they have been resolved previously.
+     * and then replacing all property placeholders. This method will not work with settings that have <code>${prompt.text}</code>
+     * or <code>${prompt.secret}</code> as their value unless they have been resolved previously.
      * @param pSettings The initial settings to use
      * @param loadConfigSettings flag to indicate whether to load settings from the configuration directory/file
      * @return the {@link Settings} and {@link Environment} as a {@link Tuple}
@@ -63,7 +63,8 @@ public class InternalSettingsPreparer {
     /**
      * Prepares the settings by gathering all elasticsearch system properties, optionally loading the configuration settings,
      * and then replacing all property placeholders. If a {@link Terminal} is provided and configuration settings are loaded,
-     * settings with the <code>__prompt__</code> value will result in a prompt for the setting to the user.
+     * settings with a value of <code>${prompt.text}</code> or <code>${prompt.secret}</code> will result in a prompt for
+     * the setting to the user.
      * @param pSettings The initial settings to use
      * @param loadConfigSettings flag to indicate whether to load settings from the configuration directory/file
      * @param terminal the Terminal to use for input/output
@@ -72,9 +73,6 @@ public class InternalSettingsPreparer {
     public static Tuple<Settings, Environment> prepareSettings(Settings pSettings, boolean loadConfigSettings, Terminal terminal) {
         // ignore this prefixes when getting properties from es. and elasticsearch.
         String[] ignorePrefixes = new String[]{"es.default.", "elasticsearch.default."};
-        // ignore the special prompt placeholders since they have the same format as property placeholders and will be resolved
-        // as having a default value because of the ':' in the format
-        String[] ignoredPlaceholders = new String[] { SECRET_PROMPT_VALUE, TEXT_PROMPT_VALUE };
         boolean useSystemProperties = !pSettings.getAsBoolean(IGNORE_SYSTEM_PROPERTIES_SETTING, false);
         // just create enough settings to build the environment
         ImmutableSettings.Builder settingsBuilder = settingsBuilder().put(pSettings);
@@ -84,7 +82,7 @@ public class InternalSettingsPreparer {
                     .putProperties("elasticsearch.", System.getProperties(), ignorePrefixes)
                     .putProperties("es.", System.getProperties(), ignorePrefixes);
         }
-        settingsBuilder.replacePropertyPlaceholders(ignoredPlaceholders);
+        settingsBuilder.replacePropertyPlaceholders();
 
         Environment environment = new Environment(settingsBuilder.build());
 
@@ -122,7 +120,7 @@ public class InternalSettingsPreparer {
             settingsBuilder.putProperties("elasticsearch.", System.getProperties(), ignorePrefixes)
                     .putProperties("es.", System.getProperties(), ignorePrefixes);
         }
-        settingsBuilder.replacePropertyPlaceholders(ignoredPlaceholders);
+        settingsBuilder.replacePropertyPlaceholders();
 
         // allow to force set properties based on configuration of the settings provided
         for (Map.Entry<String, String> entry : pSettings.getAsMap().entrySet()) {
@@ -132,18 +130,11 @@ public class InternalSettingsPreparer {
                 settingsBuilder.put(setting.substring("force.".length()), entry.getValue());
             }
         }
-        settingsBuilder.replacePropertyPlaceholders(ignoredPlaceholders);
+        settingsBuilder.replacePropertyPlaceholders();
 
-        // generate the name
+        // check if name is set in settings, if not look for system property and set it
         if (settingsBuilder.get("name") == null) {
             String name = System.getProperty("name");
-            if (name == null || name.isEmpty()) {
-                name = settingsBuilder.get("node.name");
-                if (name == null || name.isEmpty()) {
-                    name = Names.randomNodeName(environment.resolveConfig("names.txt"));
-                }
-            }
-
             if (name != null) {
                 settingsBuilder.put("name", name);
             }
@@ -154,17 +145,32 @@ public class InternalSettingsPreparer {
             settingsBuilder.put(ClusterName.SETTING, ClusterName.DEFAULT.value());
         }
 
-        Settings v1 = replacePromptPlaceholders(settingsBuilder.build(), terminal);
-        environment = new Environment(v1);
+        Settings settings = replacePromptPlaceholders(settingsBuilder.build(), terminal);
+        // all settings placeholders have been resolved. resolve the value for the name setting by checking for name,
+        // then looking for node.name, and finally generate one if needed
+        if (settings.get("name") == null) {
+            final String name = settings.get("node.name");
+            if (name == null || name.isEmpty()) {
+                settings = settingsBuilder().put(settings)
+                        .put("name", Names.randomNodeName(environment.resolveConfig("names.txt")))
+                        .build();
+            } else {
+                settings = settingsBuilder().put(settings)
+                        .put("name", name)
+                        .build();
+            }
+        }
+
+        environment = new Environment(settings);
 
         // put back the env settings
-        settingsBuilder = settingsBuilder().put(v1);
+        settingsBuilder = settingsBuilder().put(settings);
         // we put back the path.logs so we can use it in the logging configuration file
         settingsBuilder.put("path.logs", cleanPath(environment.logsFile().getAbsolutePath()));
 
-        v1 = settingsBuilder.build();
+        settings = settingsBuilder.build();
 
-        return new Tuple<>(v1, environment);
+        return new Tuple<>(settings, environment);
     }
 
     static Settings replacePromptPlaceholders(Settings settings, Terminal terminal) {

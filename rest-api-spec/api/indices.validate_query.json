@@ -1,6 +1,6 @@
 {
   "indices.validate_query": {
-    "documentation": "http://www.elastic.co/guide/en/elasticsearch/reference/1.x/search-validate.html",
+    "documentation": "http://www.elastic.co/guide/en/elasticsearch/reference/1.6/search-validate.html",
     "methods": ["GET", "POST"],
     "url": {
       "path": "/_validate/query",
@@ -66,6 +66,10 @@
         "lowercase_expanded_terms": {
           "type" : "boolean",
           "description" : "Specify whether query terms should be lowercased"
+        },
+        "rewrite": {
+          "type": "boolean",
+          "description": "Provide a more detailed explanation showing the actual Lucene query that will be executed."
         }
       }
     },

@@ -25,6 +25,7 @@ import com.google.common.collect.ImmutableMap;
 import org.apache.lucene.util.LuceneTestCase.Slow;
 import org.elasticsearch.ElasticsearchIllegalArgumentException;
 import org.elasticsearch.ExceptionsHelper;
+import org.elasticsearch.Version;
 import org.elasticsearch.action.ListenableActionFuture;
 import org.elasticsearch.action.admin.cluster.repositories.put.PutRepositoryResponse;
 import org.elasticsearch.action.admin.cluster.snapshots.create.CreateSnapshotResponse;
@@ -123,7 +124,9 @@ public class SharedClusterSnapshotRestoreTests extends AbstractSnapshotTests {
         assertThat(createSnapshotResponse.getSnapshotInfo().successfulShards(), greaterThan(0));
         assertThat(createSnapshotResponse.getSnapshotInfo().successfulShards(), equalTo(createSnapshotResponse.getSnapshotInfo().totalShards()));
 
-        assertThat(client.admin().cluster().prepareGetSnapshots("test-repo").setSnapshots("test-snap").get().getSnapshots().get(0).state(), equalTo(SnapshotState.SUCCESS));
+        SnapshotInfo snapshotInfo = client.admin().cluster().prepareGetSnapshots("test-repo").setSnapshots("test-snap").get().getSnapshots().get(0);
+        assertThat(snapshotInfo.state(), equalTo(SnapshotState.SUCCESS));
+        assertThat(snapshotInfo.version(), equalTo(Version.CURRENT));
 
         logger.info("--> delete some data");
         for (int i = 0; i < 50; i++) {
@@ -1883,126 +1886,44 @@ public class SharedClusterSnapshotRestoreTests extends AbstractSnapshotTests {
         assertEquals(1, restoreListener.count());
     }
 
-    private void assertBusyPendingTasks(final String taskPrefix, final int expectedCount) throws Exception {
-        assertBusy(new Runnable() {
-            @Override
-            public void run() {
-                PendingClusterTasksResponse tasks = client().admin().cluster().preparePendingClusterTasks().get();
-                int count = 0;
-                for(PendingClusterTask task : tasks) {
-                    logger.debug("--> pending task: " + task.getSource() );
-                    if (task.getSource().toString().startsWith(taskPrefix)) {
-                        count++;
-                    }
-                }
-                assertThat(count, equalTo(expectedCount));
-            }
-        }, 1, TimeUnit.MINUTES);
-    }
+    @Test
+    public void snapshotNameTest() throws Exception {
 
-    /**
-     * Cluster state task that blocks waits for the blockOn task to show up and then blocks execution not letting
-     * any cluster state update task to be performed unless they have priority higher then passThroughPriority.
-     *
-     * This class is useful to testing of cluster state update task batching for lower priority tasks.
-     */
-    public class BlockingClusterStateListener implements ClusterStateListener {
+        final Client client = client();
 
-        private final Predicate<ClusterChangedEvent> blockOn;
-        private final Predicate<ClusterChangedEvent> countOn;
-        private final ClusterService clusterService;
-        private final CountDownLatch latch;
-        private final Priority passThroughPriority;
-        private int count;
-        private boolean timedOut;
-        private final TimeValue timeout;
-        private long stopWaitingAt = -1;
+        logger.info("-->  creating repository");
+        assertAcked(client.admin().cluster().preparePutRepository("test-repo")
+                .setType("fs").setSettings(ImmutableSettings.settingsBuilder()
+                        .put("location", randomRepoPath())
+                        .put("compress", randomBoolean())
+                        .put("chunk_size", randomIntBetween(100, 1000))));
 
-        public BlockingClusterStateListener(ClusterService clusterService, String blockOn, String countOn, Priority passThroughPriority) {
-            this(clusterService, blockOn, countOn, passThroughPriority, TimeValue.timeValueMinutes(1));
+        try {
+            client.admin().cluster().prepareGetSnapshots("test-repo").setSnapshots("_foo").get();
+            fail("shouldn't be here");
+        } catch (InvalidSnapshotNameException ex) {
+            assertThat(ex.getMessage(), containsString("Invalid snapshot name"));
         }
 
-        public BlockingClusterStateListener(ClusterService clusterService, final String blockOn, final String countOn, Priority passThroughPriority, TimeValue timeout) {
-            this.clusterService = clusterService;
-            this.blockOn = new Predicate<ClusterChangedEvent>() {
-                @Override
-                public boolean apply(ClusterChangedEvent clusterChangedEvent) {
-                    return clusterChangedEvent.source().startsWith(blockOn);
-                }
-            };
-            this.countOn = new Predicate<ClusterChangedEvent>() {
-                @Override
-                public boolean apply(ClusterChangedEvent clusterChangedEvent) {
-                    return clusterChangedEvent.source().startsWith(countOn);
-                }
-            };
-            this.latch = new CountDownLatch(1);
-            this.passThroughPriority = passThroughPriority;
-            this.timeout = timeout;
-
+        try {
+            client.admin().cluster().prepareCreateSnapshot("test-repo", "_foo").get();
+            fail("shouldn't be here");
+        } catch (InvalidSnapshotNameException ex) {
+            assertThat(ex.getMessage(), containsString("Invalid snapshot name"));
         }
 
-        public void unblock() {
-            latch.countDown();
+        try {
+            client.admin().cluster().prepareDeleteSnapshot("test-repo", "_foo").get();
+            fail("shouldn't be here");
+        } catch (InvalidSnapshotNameException ex) {
+            assertThat(ex.getMessage(), containsString("Invalid snapshot name"));
         }
 
-        @Override
-        public void clusterChanged(ClusterChangedEvent event) {
-            if (blockOn.apply(event)) {
-                logger.info("blocking cluster state tasks on [{}]", event.source());
-                assert stopWaitingAt < 0; // Make sure we are the first time here
-                stopWaitingAt = System.currentTimeMillis() + timeout.getMillis();
-                addBlock();
-            }
-            if (countOn.apply(event)) {
-                count++;
-            }
-        }
-
-        private void addBlock() {
-            // We should block after this task - add blocking cluster state update task
-            clusterService.submitStateUpdateTask("test_block", passThroughPriority, new ClusterStateUpdateTask() {
-                @Override
-                public ClusterState execute(ClusterState currentState) throws Exception {
-                    while(System.currentTimeMillis() < stopWaitingAt) {
-                        for (PendingClusterTask task : clusterService.pendingTasks()) {
-                            if (task.getSource().string().equals("test_block") == false && passThroughPriority.sameOrAfter(task.getPriority())) {
-                                // There are other higher priority tasks in the queue and let them pass through and then set the block again
-                                logger.info("passing through cluster state task {}", task.getSource());
-                                addBlock();
-                                return currentState;
-                            }
-                        }
-                        try {
-                            logger.info("waiting....");
-                            if (latch.await(Math.min(100, timeout.millis()), TimeUnit.MILLISECONDS)){
-                                // Done waiting - unblock
-                                logger.info("unblocked");
-                                return currentState;
-                            }
-                            logger.info("done waiting....");
-                        } catch (InterruptedException ex) {
-                            Thread.currentThread().interrupt();
-                        }
-                    }
-                    timedOut = true;
-                    return currentState;
-                }
-
-                @Override
-                public void onFailure(String source, Throwable t) {
-                    logger.warn("failed to execute [{}]", t, source);
-                }
-            });
-
-        }
-
-        public int count() {
-            return count;
-        }
-
-        public boolean timedOut() {
-            return timedOut;
+        try {
+            client.admin().cluster().prepareSnapshotStatus("test-repo").setSnapshots("_foo").get();
+            fail("shouldn't be here");
+        } catch (InvalidSnapshotNameException ex) {
+            assertThat(ex.getMessage(), containsString("Invalid snapshot name"));
         }
     }
 }

@@ -48,6 +48,7 @@ import org.elasticsearch.cluster.action.index.MappingUpdatedAction;
 import org.elasticsearch.cluster.node.DiscoveryNode;
 import org.elasticsearch.cluster.node.DiscoveryNodes;
 import org.elasticsearch.cluster.routing.ShardRouting;
+import org.elasticsearch.cluster.routing.UnassignedInfo;
 import org.elasticsearch.cluster.routing.allocation.decider.DiskThresholdDecider;
 import org.elasticsearch.cluster.routing.allocation.decider.ThrottlingAllocationDecider;
 import org.elasticsearch.common.Nullable;
@@ -73,10 +74,10 @@ import org.elasticsearch.index.IndexService;
 import org.elasticsearch.index.cache.filter.FilterCacheModule;
 import org.elasticsearch.index.cache.filter.none.NoneFilterCache;
 import org.elasticsearch.index.cache.filter.weighted.WeightedFilterCache;
-import org.elasticsearch.index.gateway.local.LocalIndexShardGateway;
 import org.elasticsearch.index.engine.CommitStats;
 import org.elasticsearch.index.engine.Engine;
 import org.elasticsearch.index.engine.EngineClosedException;
+import org.elasticsearch.index.gateway.local.LocalIndexShardGateway;
 import org.elasticsearch.index.shard.IndexShard;
 import org.elasticsearch.index.shard.IndexShardModule;
 import org.elasticsearch.index.shard.ShardId;
@@ -124,9 +125,8 @@ import static org.elasticsearch.common.settings.ImmutableSettings.settingsBuilde
 import static org.elasticsearch.node.NodeBuilder.nodeBuilder;
 import static org.elasticsearch.test.ElasticsearchTestCase.assertBusy;
 import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertNoTimeout;
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.*;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThat;
 
 /**
@@ -371,7 +371,6 @@ public final class InternalTestCluster extends TestCluster {
         /* use RAM directories in 10% of the runs */
                 //.put("index.store.type", random.nextInt(10) == 0 ? MockRamIndexStoreModule.class.getName() : MockFSIndexStoreModule.class.getName())
                 // decrease the routing schedule so new nodes will be added quickly - some random value between 30 and 80 ms
-                .put("cluster.routing.schedule", (30 + random.nextInt(50)) + "ms")
                         // default to non gateway
                 .put("gateway.type", "none")
                 .put(SETTING_CLUSTER_NODE_SEED, seed);
@@ -451,6 +450,9 @@ public final class InternalTestCluster extends TestCluster {
                 builder.put(LocalIndexShardGateway.SYNC_INTERVAL, RandomInts.randomIntBetween(random, 100, 5000));
             }
         }
+
+        // always default delayed allocation to 0 to make sure we have tests are not delayed
+        builder.put(UnassignedInfo.INDEX_DELAYED_NODE_LEFT_TIMEOUT_SETTING, 0);
 
         return builder.build();
     }
@@ -1564,20 +1566,7 @@ public final class InternalTestCluster extends TestCluster {
         if (activeDisruptionScheme != null) {
             TimeValue expectedHealingTime = activeDisruptionScheme.expectedTimeToHeal();
             logger.info("Clearing active scheme {}, expected healing time {}", activeDisruptionScheme, expectedHealingTime);
-            activeDisruptionScheme.removeFromCluster(this);
-            // We don't what scheme is picked, certain schemes don't partition the cluster, but process slow, so we need
-            // to to sleep, cluster health alone doesn't verify if these schemes have been cleared.
-            if (expectedHealingTime != null && expectedHealingTime.millis() > 0) {
-                try {
-                    Thread.sleep(expectedHealingTime.millis());
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                }
-            }
-            assertFalse("cluster failed to form after disruption was healed", client().admin().cluster().prepareHealth()
-                    .setWaitForNodes("" + nodes.size())
-                    .setWaitForRelocatingShards(0)
-                    .get().isTimedOut());
+            activeDisruptionScheme.removeAndEnsureHealthy(this);
         }
         activeDisruptionScheme = null;
     }

@@ -22,7 +22,9 @@ package org.elasticsearch.env;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Sets;
 import com.google.common.primitives.Ints;
+
 import org.apache.lucene.index.IndexWriter;
+import org.apache.lucene.index.SegmentInfos;
 import org.apache.lucene.store.*;
 import org.apache.lucene.util.IOUtils;
 import org.apache.lucene.util.XIOUtils;
@@ -72,6 +74,12 @@ public class NodeEnvironment extends AbstractComponent implements Closeable {
             this.indicesPath = path.resolve(INDICES_FOLDER);
             this.fileStore = getFileStore(path);
         }
+
+        @Override
+        public String toString() {
+            return "NodePath{" +
+                    "path=" + path + '}';
+        }
     }
 
     private final NodePath[] nodePaths;
@@ -89,6 +97,9 @@ public class NodeEnvironment extends AbstractComponent implements Closeable {
     public static final String ADD_NODE_ID_TO_CUSTOM_PATH = "node.add_id_to_custom_path";
     // Setting to enable custom index.data_path setting for new indices
     public static final String SETTING_CUSTOM_DATA_PATH_ENABLED = "node.enable_custom_paths";
+
+    // If enabled, the [verbose] SegmentInfos.infoStream logging is sent to System.out:
+    public static final String SETTING_ENABLE_LUCENE_SEGMENT_INFOS_TRACE = "node.enable_lucene_segment_infos_trace";
 
     public static final String NODES_FOLDER = "nodes";
     public static final String INDICES_FOLDER = "indices";
@@ -163,6 +174,10 @@ public class NodeEnvironment extends AbstractComponent implements Closeable {
         }
 
         maybeLogPathDetails();
+
+        if (settings.getAsBoolean(SETTING_ENABLE_LUCENE_SEGMENT_INFOS_TRACE, false)) {
+            SegmentInfos.setInfoStream(System.out);
+        }
     }
 
     private static void releaseAndNullLocks(Lock[] locks) {
@@ -310,7 +325,7 @@ public class NodeEnvironment extends AbstractComponent implements Closeable {
      * shard paths. The "write.lock" file is assumed to be under the shard
      * path's "index" directory as used by Elasticsearch.
      *
-     * @throws ElasticsearchException if any of the locks could not be acquired
+     * @throws LockObtainFailedException if any of the locks could not be acquired
      */
     public static void acquireFSLockForPaths(@IndexSettings Settings indexSettings, Path... shardPaths) throws IOException {
         Lock[] locks = new Lock[shardPaths.length];
@@ -324,7 +339,7 @@ public class NodeEnvironment extends AbstractComponent implements Closeable {
                 // create a lock for the "write.lock" file
                 locks[i] = dirs[i].makeLock(IndexWriter.WRITE_LOCK_NAME);
                 if (locks[i].obtain() == false) {
-                    throw new ElasticsearchException("unable to acquire " +
+                    throw new LockObtainFailedException("unable to acquire " +
                             IndexWriter.WRITE_LOCK_NAME + " for " + p);
                 }
             }
@@ -598,7 +613,7 @@ public class NodeEnvironment extends AbstractComponent implements Closeable {
     }
 
     /**
-     * Returns an array of all of the {@link #NodePath}s.
+     * Returns an array of all of the {@link NodePath}s.
      */
     public NodePath[] nodePaths() {
         assert assertEnvIsLocked();

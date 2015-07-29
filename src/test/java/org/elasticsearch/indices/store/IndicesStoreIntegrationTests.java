@@ -42,6 +42,7 @@ import org.elasticsearch.test.ElasticsearchIntegrationTest.ClusterScope;
 import org.elasticsearch.test.InternalTestCluster;
 import org.elasticsearch.test.disruption.SlowClusterStateProcessing;
 import org.elasticsearch.test.junit.annotations.TestLogging;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import java.io.File;
@@ -74,6 +75,7 @@ public class IndicesStoreIntegrationTests extends ElasticsearchIntegrationTest {
     }
 
     @Test
+    @Ignore("https://github.com/elastic/elasticsearch/issues/11989")
     @TestLogging("indices.store:TRACE")
     public void indexCleanup() throws Exception {
         final String masterNode = internalCluster().startNode(ImmutableSettings.builder().put(SETTINGS).put("node.data", false));
@@ -110,17 +112,26 @@ public class IndicesStoreIntegrationTests extends ElasticsearchIntegrationTest {
         assertThat(Files.exists(indexDirectory(node_3, "test")), equalTo(false));
 
         logger.info("--> move shard from node_1 to node_3, and wait for relocation to finish");
+        SlowClusterStateProcessing disruption = null;
         if (randomBoolean()) { // sometimes add cluster-state delay to trigger observers in IndicesStore.ShardActiveRequestHandler
-            final SlowClusterStateProcessing disruption = new SlowClusterStateProcessing(node_3, getRandom(), 0, 0, 1000, 2000);
+            disruption = new SlowClusterStateProcessing(node_3, getRandom(), 0, 0, 1000, 2000);
             internalCluster().setDisruptionScheme(disruption);
             disruption.startDisrupting();
         }
         internalCluster().client().admin().cluster().prepareReroute().add(new MoveAllocationCommand(new ShardId("test", 0), node_1, node_3)).get();
-        clusterHealth = client().admin().cluster().prepareHealth()
+        // make sure we do not use the
+        clusterHealth = internalCluster().masterClient().admin().cluster().prepareHealth()
                 .setWaitForNodes("4")
                 .setWaitForRelocatingShards(0)
                 .get();
+        logClusterState();
         assertThat(clusterHealth.isTimedOut(), equalTo(false));
+        if (disruption != null) {
+            // we must stop the disruption here, else the delayed cluster state processing on the disrupted node
+            // can potentially delay registering the observer in IndicesStore.ShardActiveRequestHandler.messageReceived()
+            // and therefore sending the response for the shard active request for more than 10s
+            disruption.stopDisrupting();
+        }
 
         assertThat(waitForShardDeletion(node_1, "test", 0), equalTo(false));
         assertThat(waitForIndexDeletion(node_1, "test"), equalTo(false));

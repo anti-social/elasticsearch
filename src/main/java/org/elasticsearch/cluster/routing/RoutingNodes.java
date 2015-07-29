@@ -23,6 +23,7 @@ import com.carrotsearch.hppc.ObjectIntOpenHashMap;
 import com.carrotsearch.hppc.cursors.ObjectCursor;
 import com.google.common.base.Predicate;
 import com.google.common.collect.*;
+import org.apache.lucene.util.CollectionUtil;
 import org.elasticsearch.cluster.ClusterState;
 import org.elasticsearch.cluster.block.ClusterBlocks;
 import org.elasticsearch.cluster.metadata.IndexMetaData;
@@ -105,7 +106,7 @@ public class RoutingNodes implements Iterable<RoutingNode> {
                             // add the counterpart shard with relocatingNodeId reflecting the source from which
                             // it's relocating from.
                             sr = new MutableShardRouting(shard.index(), shard.id(), shard.relocatingNodeId(),
-                                    shard.currentNodeId(), shard.primary(), ShardRoutingState.INITIALIZING, shard.version());
+                                    shard.currentNodeId(), shard.restoreSource(), shard.primary(), ShardRoutingState.INITIALIZING, shard.version());
                             entries.add(sr);
                             assignedShardsAdd(sr);
                         } else if (!shard.active()) { // shards that are initializing without being relocated
@@ -566,6 +567,10 @@ public class RoutingNodes implements Iterable<RoutingNode> {
             }
         }
 
+        public void sort(Comparator<ShardRouting> comparator) {
+            CollectionUtil.timSort(unassigned, comparator);
+        }
+
         public int size() {
             return unassigned.size();
         }
@@ -782,10 +787,11 @@ public class RoutingNodes implements Iterable<RoutingNode> {
             return iterable.iterator();
         }
 
-        public void moveToUnassigned() {
-            iterator().remove();
-            unassigned().add(new MutableShardRouting(shard.index(), shard.id(),
-                    null, shard.primary(), ShardRoutingState.UNASSIGNED, shard.version() + 1));
+        public void moveToUnassigned(UnassignedInfo unassignedInfo) {
+            remove();
+            MutableShardRouting unassigned = new MutableShardRouting(shard); // protective copy of the mutable shard
+            unassigned.moveToUnassigned(unassignedInfo);
+            unassigned().add(unassigned);
         }
     }
 }
