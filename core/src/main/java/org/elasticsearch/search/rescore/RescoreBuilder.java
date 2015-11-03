@@ -22,6 +22,8 @@ package org.elasticsearch.search.rescore;
 import org.elasticsearch.common.xcontent.ToXContent;
 import org.elasticsearch.common.xcontent.XContentBuilder;
 import org.elasticsearch.index.query.QueryBuilder;
+import org.elasticsearch.script.Script;
+import org.elasticsearch.script.ScriptService;
 
 import java.io.IOException;
 
@@ -32,6 +34,14 @@ public class RescoreBuilder implements ToXContent {
 
     public static QueryRescorer queryRescorer(QueryBuilder queryBuilder) {
         return new QueryRescorer(queryBuilder);
+    }
+
+    public static RescoreBuilder.Rescorer hitGroupPositionRescorer(String groupField, String boostScript) {
+        return new HitGroupPositionRescorer(groupField, boostScript);
+    }
+
+    public static RescoreBuilder.Rescorer hitGroupPositionRescorer(String groupField, Script boostScript) {
+        return new HitGroupPositionRescorer(groupField, boostScript);
     }
 
     public RescoreBuilder rescorer(Rescorer rescorer) {
@@ -135,4 +145,40 @@ public class RescoreBuilder implements ToXContent {
         }
     }
 
+    public static class HitGroupPositionRescorer extends RescoreBuilder.Rescorer {
+        private static final String NAME = "hit_group_position";
+        private String groupField;
+        private Script boostScript;
+
+        /**
+         * Creates a new {@link HitGroupPositionRescorer} instance
+         * @param groupField the field to group by
+         * @param boostScript the script to calculate boost factor
+         */
+        public HitGroupPositionRescorer(String groupField, String boostScript) {
+            this(groupField, new Script(boostScript, ScriptService.ScriptType.INLINE, "groovy", null));
+        }
+
+        public HitGroupPositionRescorer(String groupField, Script boostScript) {
+            super(NAME);
+            if (groupField == null) {
+                throw new IllegalArgumentException("The parameter groupField (String) must not be null in HitGroupPositionRescorer.");
+            }
+            if (boostScript == null) {
+                throw new IllegalArgumentException("The parameter boostScript (Script) must not be null in HitGroupPositionRescorer.");
+            }
+            if (boostScript.getLang() != null && boostScript.getLang().equals("expression")) {
+                throw new IllegalArgumentException("'expression' language is not supported for boostScript parameter in HitGroupPositionRescorer.");
+            }
+            this.groupField = groupField;
+            this.boostScript = boostScript;
+        }
+
+        @Override
+        protected XContentBuilder innerToXContent(XContentBuilder builder, Params params) throws IOException {
+            builder.field("group_field", groupField);
+            builder.field("boost_script", boostScript);
+            return builder;
+        }
+    }
 }
