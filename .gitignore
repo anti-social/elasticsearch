@@ -28,6 +28,7 @@ dependency-reduced-pom.xml
 # testing stuff
 **/.local*
 .vagrant/
+.vagga/
 
 # osx stuff
 .DS_Store

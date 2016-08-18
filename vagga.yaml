@@ -1,0 +1,80 @@
+_default:
+  cmd-opts: &cmd-opts
+    container: jdk
+    user-id: 1
+    external-user-id: 0
+
+containers:
+  jdk:
+    setup:
+    - !Ubuntu xenial
+    - !Repo universe
+    - !Repo xenial-security/universe
+    - !Install
+      - openjdk-8-jdk-headless
+    - !Tar
+      url: http://apache.volia.net/maven/maven-3/3.3.9/binaries/apache-maven-3.3.9-bin.tar.gz
+      path: /opt/maven
+      subdir: apache-maven-3.3.9
+    - !Sh ln -s /opt/maven/bin/mvn /usr/local/bin/mvn
+    - !Sh usermod -d /root daemon
+    - !EnsureDir /var/lib/elasticsearch
+    - !CacheDirs
+      /root/.m2: maven-cache
+    volumes:
+      /root/.m2: !BindRW /vagga/cache/maven-cache
+
+commands:
+  run: !Command
+    <<: *cmd-opts
+    description: Run elasticsearch
+    prerequisites: [_build-package]
+    volumes:
+      /var/lib/elasticsearch: !Tmpfs {size: 1Gi}
+    run: |
+      set -ex
+      cd /var/lib/elasticsearch
+      ES_DIST_PATH=$(ls -x /work/distribution/tar/target/releases/elasticsearch-*.tar.gz | tail -1)
+      tar --strip-components=1 -xzf ${ES_DIST_PATH}
+      /var/lib/elasticsearch/bin/elasticsearch
+
+  mvn: !Command
+    <<: *cmd-opts
+    description: Run arbitrary maven command
+    container: jdk
+    run: [mvn]
+
+  compile: !Command
+    <<: *cmd-opts
+    description: Compile elasticsearch
+    container: jdk
+    run: [mvn, compile]
+
+  package: !Command
+    <<: *cmd-opts
+    description: Build elasticsearch distribution
+    container: jdk
+    run: [mvn, package]
+
+  build: !Command
+    <<: *cmd-opts
+    description: Build elasticsearch distribution without running tests
+    container: jdk
+    run: [mvn, package, -DskipTests]
+
+  test: !Command
+    <<: *cmd-opts
+    description: Run tests
+    container: jdk
+    run: [mvn, test]
+
+  clean: !Command
+    <<: *cmd-opts
+    description: Clean build files
+    container: jdk
+    run: [mvn, clean]
+
+  _build-package: !Command
+    <<: *cmd-opts
+    container: jdk
+    run: [mvn, clean, package, -DskipTests]
