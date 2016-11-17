@@ -92,6 +92,7 @@ import org.elasticsearch.plugins.SearchPlugin.AggregationSpec;
 import org.elasticsearch.plugins.SearchPlugin.FetchPhaseConstructionContext;
 import org.elasticsearch.plugins.SearchPlugin.PipelineAggregationSpec;
 import org.elasticsearch.plugins.SearchPlugin.QuerySpec;
+import org.elasticsearch.plugins.SearchPlugin.RescoreSpec;
 import org.elasticsearch.plugins.SearchPlugin.ScoreFunctionSpec;
 import org.elasticsearch.plugins.SearchPlugin.SearchExtSpec;
 import org.elasticsearch.plugins.SearchPlugin.SearchExtensionSpec;
@@ -290,7 +291,7 @@ public class SearchModule {
         highlighters = setupHighlighters(settings, plugins);
         registerScoreFunctions(plugins);
         registerQueryParsers(plugins);
-        registerRescorers();
+        registerRescorers(plugins);
         registerSorts();
         registerValueFormats();
         registerSignificanceHeuristics(plugins);
@@ -536,8 +537,21 @@ public class SearchModule {
         }
     }
 
-    private void registerRescorers() {
-        namedWriteables.add(new NamedWriteableRegistry.Entry(RescoreBuilder.class, QueryRescorerBuilder.NAME, QueryRescorerBuilder::new));
+    private void registerRescorers(List<SearchPlugin> plugins) {
+        registerRescorer(new RescoreSpec<>(
+                QueryRescorerBuilder.NAME, QueryRescorerBuilder::new, QueryRescorerBuilder::fromXContent));
+
+        registerFromPlugin(plugins, SearchPlugin::getRescorers, this::registerRescorer);
+    }
+
+    private void registerRescorer(RescoreSpec<?> rescore) {
+        namedWriteables.add(new NamedWriteableRegistry.Entry(
+                RescoreBuilder.class, rescore.getName().getPreferredName(), rescore.getReader()));
+        // namedXContents.add(new NamedXContentRegistry.Entry(
+        //         RescoreBuilder.class, rescore.getName(), rescore.getParser()));
+        namedXContents.add(new NamedXContentRegistry.Entry(
+                RescoreBuilder.class, rescore.getName(),
+                (p, c) -> rescore.getParser().fromXContent((QueryParseContext) c)));
     }
 
     private void registerSorts() {
