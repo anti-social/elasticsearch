@@ -95,6 +95,7 @@ import org.elasticsearch.plugins.SearchPlugin.AggregationSpec;
 import org.elasticsearch.plugins.SearchPlugin.FetchPhaseConstructionContext;
 import org.elasticsearch.plugins.SearchPlugin.PipelineAggregationSpec;
 import org.elasticsearch.plugins.SearchPlugin.QuerySpec;
+import org.elasticsearch.plugins.SearchPlugin.RescoreSpec;
 import org.elasticsearch.plugins.SearchPlugin.ScoreFunctionSpec;
 import org.elasticsearch.plugins.SearchPlugin.SearchExtSpec;
 import org.elasticsearch.plugins.SearchPlugin.SearchExtensionSpec;
@@ -294,7 +295,6 @@ public class SearchModule {
         highlighters = setupHighlighters(settings, plugins);
         registerScoreFunctions(plugins);
         registerQueryParsers(plugins);
-        registerRescorers();
         registerSorts();
         registerValueFormats();
         registerSignificanceHeuristics(plugins);
@@ -304,6 +304,7 @@ public class SearchModule {
         registerFetchSubPhases(plugins);
         registerSearchExts(plugins);
         registerShapes();
+        registerRescorers(plugins);
     }
 
     public List<NamedWriteableRegistry.Entry> getNamedWriteables() {
@@ -538,10 +539,6 @@ public class SearchModule {
         if (ShapesAvailability.JTS_AVAILABLE && ShapesAvailability.SPATIAL4J_AVAILABLE) {
             ShapeBuilders.register(namedWriteables);
         }
-    }
-
-    private void registerRescorers() {
-        namedWriteables.add(new NamedWriteableRegistry.Entry(RescoreBuilder.class, QueryRescorerBuilder.NAME, QueryRescorerBuilder::new));
     }
 
     private void registerSorts() {
@@ -779,5 +776,21 @@ public class SearchModule {
 
     public FetchPhase getFetchPhase() {
         return new FetchPhase(fetchSubPhases);
+    }
+
+    private void registerRescorers(List<SearchPlugin> plugins) {
+        registerRescorer(new RescoreSpec<>(
+                QueryRescorerBuilder.NAME, QueryRescorerBuilder::new, QueryRescorerBuilder::fromXContent));
+
+        registerFromPlugin(plugins, SearchPlugin::getRescorers, this::registerRescorer);
+    }
+
+    private void registerRescorer(RescoreSpec<?> spec) {
+        namedWriteables.add(new NamedWriteableRegistry.Entry(
+                RescoreBuilder.class, spec.getName().getPreferredName(), spec.getReader()));
+
+        namedXContents.add(new NamedXContentRegistry.Entry(
+                RescoreBuilder.class, spec.getName(),
+                (p, c) -> spec.getParser().fromXContent((QueryParseContext) c)));
     }
 }
