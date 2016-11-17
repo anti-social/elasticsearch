@@ -30,6 +30,7 @@ import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
 import org.elasticsearch.common.io.stream.Writeable;
 import org.elasticsearch.common.unit.TimeValue;
+import org.elasticsearch.common.xcontent.ParseFieldRegistry;
 import org.elasticsearch.common.xcontent.ToXContent;
 import org.elasticsearch.common.xcontent.XContentBuilder;
 import org.elasticsearch.common.xcontent.XContentParser;
@@ -49,6 +50,7 @@ import org.elasticsearch.search.fetch.subphase.FetchSourceContext;
 import org.elasticsearch.search.fetch.subphase.highlight.HighlightBuilder;
 import org.elasticsearch.search.internal.SearchContext;
 import org.elasticsearch.search.rescore.RescoreBuilder;
+import org.elasticsearch.search.rescore.RescoreRegistry;
 import org.elasticsearch.search.searchafter.SearchAfterBuilder;
 import org.elasticsearch.search.slice.SliceBuilder;
 import org.elasticsearch.search.sort.ScoreSortBuilder;
@@ -108,10 +110,13 @@ public final class SearchSourceBuilder extends ToXContentToBytes implements Writ
     public static final ParseField SLICE = new ParseField("slice");
     public static final ParseField ALL_FIELDS_FIELDS = new ParseField("all_fields");
 
-    public static SearchSourceBuilder fromXContent(QueryParseContext context, AggregatorParsers aggParsers,
-            Suggesters suggesters, SearchExtRegistry searchExtRegistry) throws IOException {
+    public static SearchSourceBuilder fromXContent(
+            QueryParseContext context, AggregatorParsers aggParsers,
+            Suggesters suggesters, SearchExtRegistry searchExtRegistry,
+            RescoreRegistry rescorers) throws IOException
+    {
         SearchSourceBuilder builder = new SearchSourceBuilder();
-        builder.parseXContent(context, aggParsers, suggesters, searchExtRegistry);
+        builder.parseXContent(context, aggParsers, suggesters, searchExtRegistry, rescorers);
         return builder;
     }
 
@@ -939,10 +944,12 @@ public final class SearchSourceBuilder extends ToXContentToBytes implements Writ
     /**
      * Parse some xContent into this SearchSourceBuilder, overwriting any values specified in the xContent. Use this if you need to set up
      * different defaults than a regular SearchSourceBuilder would have and use
-     * {@link #fromXContent(QueryParseContext, AggregatorParsers, Suggesters, SearchExtRegistry)} if you have normal defaults.
+     * {@link #fromXContent(QueryParseContext, AggregatorParsers, Suggesters, SearchExtRegistry, RescoreRegistry)}
+     * if you have normal defaults.
      */
     public void parseXContent(QueryParseContext context, AggregatorParsers aggParsers,
-                              Suggesters suggesters, SearchExtRegistry searchExtRegistry)
+                              Suggesters suggesters, SearchExtRegistry searchExtRegistry,
+                              RescoreRegistry rescorers)
         throws IOException {
 
         XContentParser parser = context.parser();
@@ -1024,7 +1031,7 @@ public final class SearchSourceBuilder extends ToXContentToBytes implements Writ
                     sorts = new ArrayList<>(SortBuilder.fromXContent(context));
                 } else if (context.getParseFieldMatcher().match(currentFieldName, RESCORE_FIELD)) {
                     rescoreBuilders = new ArrayList<>();
-                    rescoreBuilders.add(RescoreBuilder.parseFromXContent(context));
+                    rescoreBuilders.add(RescoreBuilder.parseFromXContent(context, rescorers));
                 } else if (context.getParseFieldMatcher().match(currentFieldName, EXT_FIELD)) {
                     extBuilders = new ArrayList<>();
                     String extSectionName = null;
@@ -1067,7 +1074,7 @@ public final class SearchSourceBuilder extends ToXContentToBytes implements Writ
                 } else if (context.getParseFieldMatcher().match(currentFieldName, RESCORE_FIELD)) {
                     rescoreBuilders = new ArrayList<>();
                     while ((token = parser.nextToken()) != XContentParser.Token.END_ARRAY) {
-                        rescoreBuilders.add(RescoreBuilder.parseFromXContent(context));
+                        rescoreBuilders.add(RescoreBuilder.parseFromXContent(context, rescorers));
                     }
                 } else if (context.getParseFieldMatcher().match(currentFieldName, STATS_FIELD)) {
                     stats = new ArrayList<>();

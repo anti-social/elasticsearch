@@ -91,6 +91,7 @@ import org.elasticsearch.plugins.SearchPlugin.AggregationSpec;
 import org.elasticsearch.plugins.SearchPlugin.FetchPhaseConstructionContext;
 import org.elasticsearch.plugins.SearchPlugin.PipelineAggregationSpec;
 import org.elasticsearch.plugins.SearchPlugin.QuerySpec;
+import org.elasticsearch.plugins.SearchPlugin.RescoreSpec;
 import org.elasticsearch.plugins.SearchPlugin.ScoreFunctionSpec;
 import org.elasticsearch.plugins.SearchPlugin.SearchExtSpec;
 import org.elasticsearch.plugins.SearchPlugin.SearchExtensionSpec;
@@ -257,6 +258,7 @@ import org.elasticsearch.search.fetch.subphase.highlight.PlainHighlighter;
 import org.elasticsearch.search.fetch.subphase.highlight.PostingsHighlighter;
 import org.elasticsearch.search.rescore.QueryRescorerBuilder;
 import org.elasticsearch.search.rescore.RescoreBuilder;
+import org.elasticsearch.search.rescore.RescoreRegistry;
 import org.elasticsearch.search.sort.FieldSortBuilder;
 import org.elasticsearch.search.sort.GeoDistanceSortBuilder;
 import org.elasticsearch.search.sort.ScoreSortBuilder;
@@ -293,6 +295,7 @@ public class SearchModule {
     private final Map<String, Highlighter> highlighters;
     private final Map<String, Suggester<?>> suggesters;
     private final ParseFieldRegistry<ScoreFunctionParser<?>> scoreFunctionParserRegistry = new ParseFieldRegistry<>("score_function");
+    private final RescoreRegistry rescoreParserRegistry = new RescoreRegistry();
     private final IndicesQueriesRegistry queryParserRegistry = new IndicesQueriesRegistry();
     private final ParseFieldRegistry<Aggregator.Parser> aggregationParserRegistry = new ParseFieldRegistry<>("aggregation");
     private final ParseFieldRegistry<PipelineAggregator.Parser> pipelineAggregationParserRegistry = new ParseFieldRegistry<>(
@@ -317,7 +320,7 @@ public class SearchModule {
         highlighters = setupHighlighters(settings, plugins);
         registerScoreFunctions(plugins);
         registerQueryParsers(plugins);
-        registerRescorers();
+        registerRescorers(plugins);
         registerSorts();
         registerValueFormats();
         registerSignificanceHeuristics(plugins);
@@ -327,7 +330,12 @@ public class SearchModule {
         registerFetchSubPhases(plugins);
         registerSearchExts(plugins);
         registerShapes();
-        searchRequestParsers = new SearchRequestParsers(queryParserRegistry, aggregatorParsers, getSuggesters(), searchExtParserRegistry);
+        searchRequestParsers = new SearchRequestParsers(
+                queryParserRegistry,
+                aggregatorParsers,
+                getSuggesters(),
+                searchExtParserRegistry,
+                rescoreParserRegistry);
     }
 
     public List<Entry> getNamedWriteables() {
@@ -566,8 +574,16 @@ public class SearchModule {
         }
     }
 
-    private void registerRescorers() {
-        namedWriteables.add(new Entry(RescoreBuilder.class, QueryRescorerBuilder.NAME, QueryRescorerBuilder::new));
+    private void registerRescorers(List<SearchPlugin> plugins) {
+        registerRescorer(new RescoreSpec<>(
+                QueryRescorerBuilder.NAME, QueryRescorerBuilder::new, QueryRescorerBuilder::fromXContent));
+
+        registerFromPlugin(plugins, SearchPlugin::getRescorers, this::registerRescorer);
+    }
+
+    private void registerRescorer(RescoreSpec<?> rescore) {
+        rescoreParserRegistry.register(rescore.getParser(), rescore.getName());
+        namedWriteables.add(new Entry(RescoreBuilder.class, rescore.getName().getPreferredName(), rescore.getReader()));
     }
 
     private void registerSorts() {

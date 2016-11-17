@@ -84,7 +84,7 @@ public class RestReindexAction extends AbstractBaseReindexRestHandler<ReindexReq
             try (XContentParser innerParser = parser.contentType().xContent().createParser(builder.bytes())) {
                 request.getSearchRequest().source().parseXContent(context.queryParseContext(innerParser),
                         context.searchRequestParsers.aggParsers, context.searchRequestParsers.suggesters,
-                        context.searchRequestParsers.searchExtParsers);
+                        context.searchRequestParsers.searchExtParsers, context.searchRequestParsers.rescoreParsers);
             }
         };
 
