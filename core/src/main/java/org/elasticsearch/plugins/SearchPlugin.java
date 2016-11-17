@@ -45,6 +45,9 @@ import org.elasticsearch.search.aggregations.pipeline.movavg.MovAvgPipelineAggre
 import org.elasticsearch.search.aggregations.pipeline.movavg.models.MovAvgModel;
 import org.elasticsearch.search.fetch.FetchSubPhase;
 import org.elasticsearch.search.fetch.subphase.highlight.Highlighter;
+import org.elasticsearch.search.rescore.Rescorer;
+import org.elasticsearch.search.rescore.RescoreBuilder;
+import org.elasticsearch.search.rescore.RescoreParser;
 import org.elasticsearch.search.suggest.Suggester;
 
 import java.util.List;
@@ -109,6 +112,12 @@ public interface SearchPlugin {
         return emptyList();
     }
     /**
+     * The new {@link Rescorer}s defined by this plugin.
+     */
+    default List<RescoreSpec<?>> getRescorers() {
+        return emptyList();
+    }
+    /**
      * The new {@link Aggregation}s added by this plugin.
      */
     default List<AggregationSpec> getAggregations() {
@@ -165,6 +174,19 @@ public interface SearchPlugin {
             super(name, reader, parser);
         }
     }
+    /**
+     * Specification of custom {@link Rescorer}.
+     */
+    class RescoreSpec<T extends RescoreBuilder<T>> extends SearchExtensionSpec<T, RescoreParser<T>> {
+        public RescoreSpec(ParseField name, Writeable.Reader<T> reader, RescoreParser<T> parser) {
+            super(name, reader, parser);
+        }
+
+        public RescoreSpec(String name, Writeable.Reader<T> reader, RescoreParser<T> parser) {
+            super(name, reader, parser);
+        }
+    }
+
     /**
      * Specification for an {@link Aggregation}.
      */
