@@ -19,8 +19,10 @@
 
 package org.elasticsearch.search;
 
+import org.elasticsearch.common.xcontent.ParseFieldRegistry;
 import org.elasticsearch.index.query.QueryParseContext;
 import org.elasticsearch.indices.query.IndicesQueriesRegistry;
+import org.elasticsearch.search.rescore.RescoreRegistry;
 import org.elasticsearch.search.aggregations.AggregatorParsers;
 import org.elasticsearch.search.suggest.Suggesters;
 
@@ -38,7 +40,7 @@ public class SearchRequestParsers {
      * Query parsers that may be used in search requests.
      * @see org.elasticsearch.index.query.QueryParseContext
      * @see org.elasticsearch.search.builder.SearchSourceBuilder#fromXContent(QueryParseContext, AggregatorParsers,
-     *      Suggesters, SearchExtRegistry)
+     *      Suggesters, SearchExtRegistry, RescoreRegistry)
      */
     public final IndicesQueriesRegistry queryParsers;
 
@@ -47,7 +49,7 @@ public class SearchRequestParsers {
     /**
      * Agg and pipeline agg parsers that may be used in search requests.
      * @see org.elasticsearch.search.builder.SearchSourceBuilder#fromXContent(QueryParseContext, AggregatorParsers,
-     *      Suggesters, SearchExtRegistry)
+     *      Suggesters, SearchExtRegistry, RescoreRegistry)
      */
     public final AggregatorParsers aggParsers;
 
@@ -55,7 +57,7 @@ public class SearchRequestParsers {
     /**
      * Suggesters that may be used in search requests.
      * @see org.elasticsearch.search.builder.SearchSourceBuilder#fromXContent(QueryParseContext, AggregatorParsers,
-     *      Suggesters, SearchExtRegistry)
+     *      Suggesters, SearchExtRegistry, RescoreRegistry)
      */
     public final Suggesters suggesters;
 
@@ -64,11 +66,19 @@ public class SearchRequestParsers {
      */
     public final SearchExtRegistry searchExtParsers;
 
+    /**
+     * Rescorers that may be used in search requests.
+     * @see org.elasticsearch.search.builder.SearchSourceBuilder#fromXContent(QueryParseContext, AggregatorParsers,
+     *      Suggesters, SearchExtRegistry, RescoreRegistry)
+     */
+    public final RescoreRegistry rescoreParsers;
+
     public SearchRequestParsers(IndicesQueriesRegistry queryParsers, AggregatorParsers aggParsers, Suggesters suggesters,
-                                SearchExtRegistry searchExtParsers) {
+                                SearchExtRegistry searchExtParsers, RescoreRegistry rescoreParsers) {
         this.queryParsers = queryParsers;
         this.aggParsers = aggParsers;
         this.suggesters = suggesters;
         this.searchExtParsers = searchExtParsers;
+        this.rescoreParsers = rescoreParsers;
     }
 }
