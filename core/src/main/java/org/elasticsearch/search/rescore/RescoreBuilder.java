@@ -75,7 +75,8 @@ public abstract class RescoreBuilder<RB extends RescoreBuilder<RB>> extends ToXC
         return windowSize;
     }
 
-    public static RescoreBuilder<?> parseFromXContent(QueryParseContext parseContext) throws IOException {
+    public static RescoreBuilder<?> parseFromXContent(QueryParseContext parseContext,
+                                                      RescoreRegistry rescorers) throws IOException {
         XContentParser parser = parseContext.parser();
         String fieldName = null;
         RescoreBuilder<?> rescorer = null;
@@ -91,12 +92,9 @@ public abstract class RescoreBuilder<RB extends RescoreBuilder<RB>> extends ToXC
                     throw new ParsingException(parser.getTokenLocation(), "rescore doesn't support [" + fieldName + "]");
                 }
             } else if (token == XContentParser.Token.START_OBJECT) {
-                // we only have QueryRescorer at this point
-                if (QueryRescorerBuilder.NAME.equals(fieldName)) {
-                    rescorer = QueryRescorerBuilder.fromXContent(parseContext);
-                } else {
-                    throw new ParsingException(parser.getTokenLocation(), "rescore doesn't support rescorer with name [" + fieldName + "]");
-                }
+                RescoreParser rescoreParser = rescorers.lookup(
+                        fieldName, parseContext.getParseFieldMatcher(), parser.getTokenLocation());
+                rescorer = rescoreParser.fromXContent(parseContext);
             } else {
                 throw new ParsingException(parser.getTokenLocation(), "unexpected token [" + token + "] after [" + fieldName + "]");
             }
@@ -123,7 +121,7 @@ public abstract class RescoreBuilder<RB extends RescoreBuilder<RB>> extends ToXC
 
     protected abstract void doXContent(XContentBuilder builder, Params params) throws IOException;
 
-    public abstract QueryRescoreContext build(QueryShardContext context) throws IOException;
+    public abstract RescoreSearchContext build(QueryShardContext context) throws IOException;
 
     public static QueryRescorerBuilder queryRescorer(QueryBuilder queryBuilder) {
         return new QueryRescorerBuilder(queryBuilder);
