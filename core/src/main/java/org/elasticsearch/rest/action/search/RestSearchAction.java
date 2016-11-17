@@ -97,7 +97,7 @@ public class RestSearchAction extends BaseRestHandler {
         if (requestContentParser != null) {
             QueryParseContext context = new QueryParseContext(requestContentParser, parseFieldMatcher);
             searchRequest.source().parseXContent(context, searchRequestParsers.aggParsers, searchRequestParsers.suggesters,
-                    searchRequestParsers.searchExtParsers);
+                    searchRequestParsers.searchExtParsers, searchRequestParsers.rescoreParsers);
         }
 
         // do not allow 'query_and_fetch' or 'dfs_query_and_fetch' search types
