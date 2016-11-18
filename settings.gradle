@@ -51,6 +51,7 @@ List projects = [
   'plugins:repository-gcs',
   'plugins:repository-hdfs',
   'plugins:repository-s3',
+  'plugins:rescore-grouping-mixup',
   'plugins:jvm-example',
   'plugins:store-smb',
   'qa:backwards-5.0',
