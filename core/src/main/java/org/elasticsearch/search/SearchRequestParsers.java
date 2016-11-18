@@ -39,8 +39,7 @@ public class SearchRequestParsers {
     /**
      * Query parsers that may be used in search requests.
      * @see org.elasticsearch.index.query.QueryParseContext
-     * @see org.elasticsearch.search.builder.SearchSourceBuilder#fromXContent(QueryParseContext, AggregatorParsers,
-     *      Suggesters, SearchExtRegistry, RescoreRegistry)
+     * @see org.elasticsearch.search.builder.SearchSourceBuilder#fromXContent(QueryParseContext, SearchRequestParsers)
      */
     public final IndicesQueriesRegistry queryParsers;
 
@@ -48,16 +47,14 @@ public class SearchRequestParsers {
     // and pipeline agg parsers should be here
     /**
      * Agg and pipeline agg parsers that may be used in search requests.
-     * @see org.elasticsearch.search.builder.SearchSourceBuilder#fromXContent(QueryParseContext, AggregatorParsers,
-     *      Suggesters, SearchExtRegistry, RescoreRegistry)
+     * @see org.elasticsearch.search.builder.SearchSourceBuilder#fromXContent(QueryParseContext, SearchRequestParsers)
      */
     public final AggregatorParsers aggParsers;
 
     // TODO: Suggesters should be removed and the underlying map moved here
     /**
      * Suggesters that may be used in search requests.
-     * @see org.elasticsearch.search.builder.SearchSourceBuilder#fromXContent(QueryParseContext, AggregatorParsers,
-     *      Suggesters, SearchExtRegistry, RescoreRegistry)
+     * @see org.elasticsearch.search.builder.SearchSourceBuilder#fromXContent(QueryParseContext, SearchRequestParsers)
      */
     public final Suggesters suggesters;
 
@@ -68,8 +65,7 @@ public class SearchRequestParsers {
 
     /**
      * Rescorers that may be used in search requests.
-     * @see org.elasticsearch.search.builder.SearchSourceBuilder#fromXContent(QueryParseContext, AggregatorParsers,
-     *      Suggesters, SearchExtRegistry, RescoreRegistry)
+     * @see org.elasticsearch.search.builder.SearchSourceBuilder#fromXContent(QueryParseContext, SearchRequestParsers)
      */
     public final RescoreRegistry rescoreParsers;
 
