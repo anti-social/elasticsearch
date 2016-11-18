@@ -93,9 +93,7 @@ public class RestMultiSearchAction extends BaseRestHandler {
             try (XContentParser requestParser = XContentFactory.xContent(bytes).createParser(bytes)) {
                 final QueryParseContext queryParseContext = new QueryParseContext(searchRequestParsers.queryParsers,
                     requestParser, parseFieldMatcher);
-                searchRequest.source(SearchSourceBuilder.fromXContent(queryParseContext,
-                    searchRequestParsers.aggParsers, searchRequestParsers.suggesters,
-                    searchRequestParsers.searchExtParsers, searchRequestParsers.rescoreParsers));
+                searchRequest.source(SearchSourceBuilder.fromXContent(queryParseContext, searchRequestParsers));
                 multiRequest.add(searchRequest);
             } catch (IOException e) {
                 throw new ElasticsearchParseException("Exception when parsing search request", e);
