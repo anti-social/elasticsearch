@@ -160,9 +160,7 @@ public class TransportMultiPercolateAction extends HandledTransportAction<MultiP
             BytesReference docSource = getResponseSources.get(i);
             try {
                 SearchRequest searchRequest = TransportPercolateAction.createSearchRequest(
-                    percolateRequest, docSource,
-                    searchRequestParsers.aggParsers, searchRequestParsers.searchExtParsers, searchRequestParsers.rescoreParsers,
-                    xContentRegistry, parseFieldMatcher);
+                    percolateRequest, docSource, searchRequestParsers, xContentRegistry, parseFieldMatcher);
                 multiSearchRequest.add(searchRequest);
             } catch (Exception e) {
                 preFailures.put(i, new MultiPercolateResponse.Item(e));

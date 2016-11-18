@@ -107,9 +107,7 @@ public class TransportPercolateAction extends HandledTransportAction<PercolateRe
     private void innerDoExecute(PercolateRequest request, BytesReference docSource, ActionListener<PercolateResponse> listener) {
         SearchRequest searchRequest;
         try {
-            searchRequest = createSearchRequest(request, docSource,
-                searchRequestParsers.aggParsers, searchRequestParsers.searchExtParsers, searchRequestParsers.rescoreParsers,
-                xContentRegistry, parseFieldMatcher);
+            searchRequest = createSearchRequest(request, docSource, searchRequestParsers, xContentRegistry, parseFieldMatcher);
         } catch (IOException e) {
             listener.onFailure(e);
             return;
@@ -132,9 +130,8 @@ public class TransportPercolateAction extends HandledTransportAction<PercolateRe
     }
 
     public static SearchRequest createSearchRequest(PercolateRequest percolateRequest, BytesReference documentSource,
-                                                    AggregatorParsers aggParsers,
-                                                    SearchExtRegistry searchExtRegistry, RescoreRegistry rescoreRegistry,
-                                                    NamedXContentRegistry xContentRegistry, ParseFieldMatcher parseFieldMatcher)
+                                                    SearchRequestParsers searchRequestParsers, NamedXContentRegistry xContentRegistry,
+                                                    ParseFieldMatcher parseFieldMatcher)
             throws IOException {
         SearchRequest searchRequest = new SearchRequest();
         if (percolateRequest.indices() != null) {
@@ -231,7 +228,7 @@ public class TransportPercolateAction extends HandledTransportAction<PercolateRe
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
         try (XContentParser parser = XContentFactory.xContent(XContentType.JSON).createParser(xContentRegistry, source)) {
             QueryParseContext context = new QueryParseContext(parser, parseFieldMatcher);
-            searchSourceBuilder.parseXContent(context, aggParsers, null, searchExtRegistry, rescoreRegistry);
+            searchSourceBuilder.parseXContent(context, searchRequestParsers);
             searchRequest.source(searchSourceBuilder);
             return searchRequest;
         }

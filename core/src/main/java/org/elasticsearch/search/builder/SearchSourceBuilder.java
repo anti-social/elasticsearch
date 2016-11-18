@@ -30,7 +30,6 @@ import org.elasticsearch.common.io.stream.Writeable;
 import org.elasticsearch.common.logging.DeprecationLogger;
 import org.elasticsearch.common.logging.Loggers;
 import org.elasticsearch.common.unit.TimeValue;
-import org.elasticsearch.common.xcontent.ParseFieldRegistry;
 import org.elasticsearch.common.xcontent.ToXContent;
 import org.elasticsearch.common.xcontent.XContentBuilder;
 import org.elasticsearch.common.xcontent.XContentParser;
@@ -40,17 +39,15 @@ import org.elasticsearch.index.query.QueryShardContext;
 import org.elasticsearch.script.Script;
 import org.elasticsearch.search.SearchExtBuilder;
 import org.elasticsearch.search.SearchExtParser;
-import org.elasticsearch.search.SearchExtRegistry;
+import org.elasticsearch.search.SearchRequestParsers;
 import org.elasticsearch.search.aggregations.AggregationBuilder;
 import org.elasticsearch.search.aggregations.AggregatorFactories;
-import org.elasticsearch.search.aggregations.AggregatorParsers;
 import org.elasticsearch.search.aggregations.PipelineAggregationBuilder;
 import org.elasticsearch.search.fetch.StoredFieldsContext;
 import org.elasticsearch.search.fetch.subphase.FetchSourceContext;
 import org.elasticsearch.search.fetch.subphase.highlight.HighlightBuilder;
 import org.elasticsearch.search.internal.SearchContext;
 import org.elasticsearch.search.rescore.RescoreBuilder;
-import org.elasticsearch.search.rescore.RescoreRegistry;
 import org.elasticsearch.search.searchafter.SearchAfterBuilder;
 import org.elasticsearch.search.slice.SliceBuilder;
 import org.elasticsearch.search.sort.ScoreSortBuilder;
@@ -58,7 +55,6 @@ import org.elasticsearch.search.sort.SortBuilder;
 import org.elasticsearch.search.sort.SortBuilders;
 import org.elasticsearch.search.sort.SortOrder;
 import org.elasticsearch.search.suggest.SuggestBuilder;
-import org.elasticsearch.search.suggest.Suggesters;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -109,12 +105,10 @@ public final class SearchSourceBuilder extends ToXContentToBytes implements Writ
     public static final ParseField ALL_FIELDS_FIELDS = new ParseField("all_fields");
 
     public static SearchSourceBuilder fromXContent(
-            QueryParseContext context, AggregatorParsers aggParsers,
-            Suggesters suggesters, SearchExtRegistry searchExtRegistry,
-            RescoreRegistry rescorers) throws IOException
-    {
+            QueryParseContext context, SearchRequestParsers parsers) throws IOException {
+
         SearchSourceBuilder builder = new SearchSourceBuilder();
-        builder.parseXContent(context, aggParsers, suggesters, searchExtRegistry, rescorers);
+        builder.parseXContent(context, parsers);
         return builder;
     }
 
@@ -919,13 +913,9 @@ public final class SearchSourceBuilder extends ToXContentToBytes implements Writ
     /**
      * Parse some xContent into this SearchSourceBuilder, overwriting any values specified in the xContent. Use this if you need to set up
      * different defaults than a regular SearchSourceBuilder would have and use
-     * {@link #fromXContent(QueryParseContext, AggregatorParsers, Suggesters, SearchExtRegistry, RescoreRegistry)}
-     * if you have normal defaults.
+     * {@link #fromXContent(QueryParseContext, SearchRequestParsers)} if you have normal defaults.
      */
-    public void parseXContent(QueryParseContext context, AggregatorParsers aggParsers,
-                              Suggesters suggesters, SearchExtRegistry searchExtRegistry,
-                              RescoreRegistry rescorers)
-        throws IOException {
+    public void parseXContent(QueryParseContext context, SearchRequestParsers parsers) throws IOException {
 
         XContentParser parser = context.parser();
         XContentParser.Token token = parser.currentToken();
@@ -998,16 +988,16 @@ public final class SearchSourceBuilder extends ToXContentToBytes implements Writ
                     }
                 } else if (AGGREGATIONS_FIELD.match(currentFieldName)
                         || AGGS_FIELD.match(currentFieldName)) {
-                    aggregations = aggParsers.parseAggregators(context);
+                    aggregations = parsers.aggParsers.parseAggregators(context);
                 } else if (HIGHLIGHT_FIELD.match(currentFieldName)) {
                     highlightBuilder = HighlightBuilder.fromXContent(context);
                 } else if (SUGGEST_FIELD.match(currentFieldName)) {
-                    suggestBuilder = SuggestBuilder.fromXContent(context, suggesters);
+                    suggestBuilder = SuggestBuilder.fromXContent(context, parsers.suggesters);
                 } else if (SORT_FIELD.match(currentFieldName)) {
                     sorts = new ArrayList<>(SortBuilder.fromXContent(context));
                 } else if (RESCORE_FIELD.match(currentFieldName)) {
                     rescoreBuilders = new ArrayList<>();
-                    rescoreBuilders.add(RescoreBuilder.parseFromXContent(context, rescorers));
+                    rescoreBuilders.add(RescoreBuilder.parseFromXContent(context, parsers.rescoreParsers));
                 } else if (EXT_FIELD.match(currentFieldName)) {
                     extBuilders = new ArrayList<>();
                     String extSectionName = null;
@@ -1015,7 +1005,7 @@ public final class SearchSourceBuilder extends ToXContentToBytes implements Writ
                         if (token == XContentParser.Token.FIELD_NAME) {
                             extSectionName = parser.currentName();
                         } else {
-                            SearchExtParser searchExtParser = searchExtRegistry.lookup(extSectionName, parser.getTokenLocation());
+                            SearchExtParser searchExtParser = parsers.searchExtParsers.lookup(extSectionName, parser.getTokenLocation());
                             SearchExtBuilder searchExtBuilder = searchExtParser.fromXContent(parser);
                             if (searchExtBuilder.getWriteableName().equals(extSectionName) == false) {
                                 throw new IllegalStateException("The parsed [" + searchExtBuilder.getClass().getName() + "] object has a "
@@ -1053,7 +1043,7 @@ public final class SearchSourceBuilder extends ToXContentToBytes implements Writ
                 } else if (RESCORE_FIELD.match(currentFieldName)) {
                     rescoreBuilders = new ArrayList<>();
                     while ((token = parser.nextToken()) != XContentParser.Token.END_ARRAY) {
-                        rescoreBuilders.add(RescoreBuilder.parseFromXContent(context, rescorers));
+                        rescoreBuilders.add(RescoreBuilder.parseFromXContent(context, parsers.rescoreParsers));
                     }
                 } else if (STATS_FIELD.match(currentFieldName)) {
                     stats = new ArrayList<>();
