@@ -120,7 +120,7 @@ public class QueryRescoreBuilderTests extends ESTestCase {
             XContentBuilder shuffled = shuffleXContent(builder);
 
 
-            XContentParser parser =  XContentHelper.createParser(shuffled.bytes());
+            XContentParser parser = XContentHelper.createParser(shuffled.bytes());
             QueryParseContext context = new QueryParseContext(indicesQueriesRegistry, parser, ParseFieldMatcher.STRICT);
             parser.nextToken();
             RescoreBuilder<?> secondRescoreBuilder = RescoreBuilder.parseFromXContent(context, rescoreRegistry);
