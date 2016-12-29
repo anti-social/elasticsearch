@@ -46,3 +46,6 @@ html_docs
 backwards/
 eclipse-build
 
+# containers data
+/.vagga
+
