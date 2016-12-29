@@ -49,3 +49,5 @@ html_docs
 /tmp/
 eclipse-build
 
+# containers data
+/.vagga

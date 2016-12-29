@@ -1,0 +1,100 @@
+minimum-vagga: 0.7.1
+
+_defaults:
+  gradle_home: &gradle_home /work/.gradle
+  command_options: &cmd_opts
+    container: jdk
+    prerequisites: [_mk-gradle-dir]
+    user-id: 1
+    external-user-id: 0
+    volumes:
+      /work/.gradle/caches: !CacheDir gradle-cache
+
+containers:
+  jdk:
+    environ:
+      JAVA_HOME: /usr/lib/jvm/java-8-openjdk-amd64
+      GRADLE_USER_HOME: /work/.gradle
+    setup:
+    - !Ubuntu xenial
+    - !Install
+      - openjdk-8-jdk
+    - !Unzip
+      url: https://services.gradle.org/distributions/gradle-3.4.1-bin.zip
+      path: /opt/gradle
+      subdir: gradle-3.4.1
+    - !Sh ln -s /opt/gradle/bin/gradle /usr/local/bin/gradle
+
+commands:
+  _mk-gradle-dir: !Command
+    container: jdk
+    run: mkdir -p /work/.gradle/caches
+
+  gradle: !Command
+    <<: *cmd_opts
+    description: Run arbitrary gradle command
+    run: [gradle]
+
+  clean: !Command
+    <<: *cmd_opts
+    description: Clean up project
+    run: [gradle, clean]
+
+  daemon: !Command
+    <<: *cmd_opts
+    description: Run gradle daemon
+    run: |
+      # --foreground option runs daemon with different jvm options
+      # so then another gradle process rejects to connect to the daemon
+      gradle --dry-run --daemon build
+      tail -f /work/.gradle/daemon/3.4.1/daemon-*.out.log
+
+  compile: !Command
+    <<: *cmd_opts
+    description: Compile all java files
+    run: [gradle, compileJava]
+
+  compile-test: !Command
+    <<: *cmd_opts
+    description: Compile all java files
+    run: [gradle, compileTestJava]
+
+  build: !Command
+    <<: *cmd_opts
+    description: Run tests and build package
+    run: [gradle, build]
+
+  assemble: !Command
+    <<: *cmd_opts
+    description: Only assemple package
+    run: [gradle, assemble]
+
+  assemble-release: !Command
+    <<: *cmd_opts
+    description: Only assemple package (release version)
+    run: [gradle, assemble, -Dbuild.snapshot=false]
+
+  run: !Command
+    <<: *cmd_opts
+    description: Run elasticsearch
+    run: [gradle, run]
+
+  test: !Command
+    <<: *cmd_opts
+    description: Run tests
+    run: [gradle, test]
+
+  integ-test: !Command
+    <<: *cmd_opts
+    description: Run integration tests
+    run: [gradle, integTest]
+
+  precommit: !Command
+    <<: *cmd_opts
+    description: Run precommit checks and tests
+    run: [gradle, precommit]
+
+  check: !Command
+    <<: *cmd_opts
+    description: Run all checks and tests
+    run: [gradle, check]
