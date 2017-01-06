@@ -44,7 +44,8 @@ public class GroupingMixupRescorer implements Rescorer {
     public static final String NAME = "grouping_mixup";
     public static final GroupingMixupRescorer INSTANCE = new GroupingMixupRescorer();
 
-    protected final org.apache.logging.log4j.Logger logger = org.elasticsearch.common.logging.Loggers.getLogger(getClass());
+    // protected final org.apache.logging.log4j.Logger logger =
+    //     org.elasticsearch.common.logging.Loggers.getLogger(getClass());
 
     private final static Comparator<ScoreDoc> DOC_COMPARATOR = new Comparator<ScoreDoc>() {
         @Override
@@ -161,7 +162,6 @@ public class GroupingMixupRescorer implements Rescorer {
             leafBoostScript.setNextVar("_pos", pos);
             float oldScore = hit.score;
             hit.score = hit.score * (float) leafBoostScript.runAsDouble();
-            logger.warn(String.format("hit.doc: %s, pos: %s, score: %s, old_score: %s", hit.doc, pos, hit.score, oldScore));
 
             pos++;
             prevGroupValue = curGroupValue;
@@ -191,7 +191,7 @@ public class GroupingMixupRescorer implements Rescorer {
         private final SearchScript declineScript;
 
         public Context(GroupingMixupRescorer rescorer, String groupingField, SearchScript declineScript) {
-            super(GroupingMixupRescorerBuilder.NAME, DEFAULT_WINDOW_SIZE, rescorer);
+            super(GroupingMixupRescorerBuilder.NAME.getPreferredName(), DEFAULT_WINDOW_SIZE, rescorer);
             this.groupingField = groupingField;
             this.declineScript = declineScript;
         }

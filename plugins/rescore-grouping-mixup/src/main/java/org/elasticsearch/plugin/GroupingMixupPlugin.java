@@ -26,6 +26,7 @@ import org.elasticsearch.script.NativeScriptFactory;
 import org.elasticsearch.script.PositionRecipScript;
 import org.elasticsearch.search.rescore.GroupingMixupRescorerBuilder;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import static java.util.Collections.singletonList;
@@ -36,10 +37,14 @@ public class GroupingMixupPlugin extends Plugin
 
     @Override
     public List<SearchPlugin.RescoreSpec<?>> getRescorers() {
-        return singletonList(new SearchPlugin.RescoreSpec<>(
-                        GroupingMixupRescorerBuilder.NAME,
-                        GroupingMixupRescorerBuilder::new,
-                        GroupingMixupRescorerBuilder.PARSER));
+        List<SearchPlugin.RescoreSpec<?>> rescorers = new ArrayList<>();
+        for (String name : GroupingMixupRescorerBuilder.NAME.getAllNamesIncludedDeprecated()) {
+            rescorers.add(new SearchPlugin.RescoreSpec<>
+                (name,
+                 GroupingMixupRescorerBuilder::new,
+                 GroupingMixupRescorerBuilder.PARSER));
+        }
+        return rescorers;
     }
 
     @Override

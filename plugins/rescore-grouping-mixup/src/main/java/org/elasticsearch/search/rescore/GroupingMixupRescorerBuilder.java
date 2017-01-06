@@ -36,10 +36,11 @@ import java.io.IOException;
 import java.util.Collections;
 
 public class GroupingMixupRescorerBuilder extends RescoreBuilder<GroupingMixupRescorerBuilder> {
-    public static final String NAME = "grouping_mixup";
+    public static final ParseField NAME = new ParseField("grouping_mixup", "hit_group_position");
     public static final RescoreParser<GroupingMixupRescorerBuilder> PARSER = new Parser();
 
-    protected final org.apache.logging.log4j.Logger logger = org.elasticsearch.common.logging.Loggers.getLogger(getClass());
+    // protected final org.apache.logging.log4j.Logger logger =
+    //     org.elasticsearch.common.logging.Loggers.getLogger(getClass());
 
     private String groupingField;
     private Script declineScript;
@@ -53,7 +54,6 @@ public class GroupingMixupRescorerBuilder extends RescoreBuilder<GroupingMixupRe
         super(in);
         groupingField = in.readString();
         declineScript = new Script(in);
-        // throw new IOException(String.format("GroupingMixupRescorerBuilder::new - %s, %s", groupingField, declineScript));
     }
 
     @Override
@@ -64,7 +64,7 @@ public class GroupingMixupRescorerBuilder extends RescoreBuilder<GroupingMixupRe
 
     @Override
     public void doXContent(XContentBuilder builder, Params params) throws IOException {
-        builder.startObject(NAME);
+        builder.startObject(NAME.getPreferredName());
         builder.field(Parser.GROUPING_FIELD_FIELD.getPreferredName(), groupingField);
         builder.field(Parser.SCRIPT_FIELD.getPreferredName(), declineScript);
         builder.endObject();
@@ -83,14 +83,15 @@ public class GroupingMixupRescorerBuilder extends RescoreBuilder<GroupingMixupRe
 
     @Override
     public String getWriteableName() {
-        return NAME;
+        return NAME.getPreferredName();
     }
 
     public static class Parser implements RescoreParser<GroupingMixupRescorerBuilder> {
-        protected final org.apache.logging.log4j.Logger logger = org.elasticsearch.common.logging.Loggers.getLogger(getClass());
+        // protected final org.apache.logging.log4j.Logger logger =
+        //     org.elasticsearch.common.logging.Loggers.getLogger(getClass());
 
-        private static ParseField GROUPING_FIELD_FIELD = new ParseField("field");
-        private static ParseField SCRIPT_FIELD = new ParseField("decline_script");
+        private static ParseField GROUPING_FIELD_FIELD = new ParseField("field", "group_field");
+        private static ParseField SCRIPT_FIELD = new ParseField("decline_script", "boost_script");
 
         @Override
         public GroupingMixupRescorerBuilder fromXContent(QueryParseContext parseContext)
