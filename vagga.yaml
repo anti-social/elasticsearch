@@ -24,6 +24,8 @@ containers:
       path: /opt/gradle
       subdir: gradle-2.13
     - !Sh ln -s /opt/gradle/bin/gradle /usr/local/bin/gradle
+    - !CacheDirs
+      /root/.gradle/caches: gradle-cache
 
 commands:
   _mk-gradle-dir: !Command
