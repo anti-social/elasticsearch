@@ -1,3 +1,5 @@
+minimum-vagga: 0.7.1
+
 _defaults:
   gradle_home: &gradle_home /work/.gradle
   command_options: &cmd_opts
@@ -6,7 +8,7 @@ _defaults:
     user-id: 1
     external-user-id: 0
     volumes:
-      /work/.gradle/caches: !BindRW /vagga/cache/gradle-cache
+      /work/.gradle/caches: !CacheDir gradle-cache
 
 containers:
   jdk:
