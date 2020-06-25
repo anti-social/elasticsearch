@@ -106,7 +106,7 @@ public abstract class MappedFieldType extends FieldType {
      *
      * @param fullyQualifiedIndexName the name of the index this field-data is build for
      * */
-    public IndexFieldData.Builder fielddataBuilder(String fullyQualifiedIndexName) {
+    public IndexFieldData.Builder fielddataBuilder(String fullyQualifiedIndexName, int shardId) {
         throw new IllegalArgumentException("Fielddata is not supported on field [" + name() + "] of type [" + typeName() + "]");
     }
 
@@ -327,7 +327,7 @@ public abstract class MappedFieldType extends FieldType {
      */
     public boolean isAggregatable() {
         try {
-            fielddataBuilder("");
+            fielddataBuilder("", 0);
             return true;
         } catch (IllegalArgumentException e) {
             return false;

@@ -228,7 +228,7 @@ public class GeoPointFieldMapper extends FieldMapper implements ArrayValueMapper
         }
 
         @Override
-        public IndexFieldData.Builder fielddataBuilder(String fullyQualifiedIndexName) {
+        public IndexFieldData.Builder fielddataBuilder(String fullyQualifiedIndexName, int shardId) {
             failIfNoDocValues();
             return new AbstractLatLonPointDVIndexFieldData.Builder();
         }

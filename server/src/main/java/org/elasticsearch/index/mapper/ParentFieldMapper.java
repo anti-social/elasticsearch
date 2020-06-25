@@ -211,7 +211,7 @@ public class ParentFieldMapper extends MetadataFieldMapper {
         }
 
         @Override
-        public IndexFieldData.Builder fielddataBuilder(String fullyQualifiedIndexName) {
+        public IndexFieldData.Builder fielddataBuilder(String fullyQualifiedIndexName, int shardId) {
             return new DocValuesIndexFieldData.Builder();
         }
     }
