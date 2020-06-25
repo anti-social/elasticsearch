@@ -165,7 +165,6 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
-import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
@@ -194,7 +193,7 @@ public class IndexShard extends AbstractIndexShardComponent implements IndicesCl
     private final TranslogConfig translogConfig;
     private final IndexEventListener indexEventListener;
     private final QueryCachingPolicy cachingPolicy;
-    private final Supplier<Sort> indexSortSupplier;
+    private final Function<Integer, Sort> indexSortSupplier;
     // Package visible for testing
     final CircuitBreakerService circuitBreakerService;
 
@@ -259,7 +258,7 @@ public class IndexShard extends AbstractIndexShardComponent implements IndicesCl
             final IndexSettings indexSettings,
             final ShardPath path,
             final Store store,
-            final Supplier<Sort> indexSortSupplier,
+            final Function<Integer, Sort> indexSortSupplier,
             final IndexCache indexCache,
             final MapperService mapperService,
             final SimilarityService similarityService,
@@ -366,7 +365,7 @@ public class IndexShard extends AbstractIndexShardComponent implements IndicesCl
      * Return the sort order of this index, or null if the index has no sort.
      */
     public Sort getIndexSort() {
-        return indexSortSupplier.get();
+        return indexSortSupplier.apply(shardId.id());
     }
 
     public ShardGetService getService() {
@@ -2533,7 +2532,7 @@ public class IndexShard extends AbstractIndexShardComponent implements IndicesCl
     }
 
     private EngineConfig newEngineConfig() {
-        Sort indexSort = indexSortSupplier.get();
+        Sort indexSort = indexSortSupplier.apply(shardId.id());
         return new EngineConfig(shardId, shardRouting.allocationId().getId(),
                 threadPool, indexSettings, warmer, store, indexSettings.getMergePolicy(),
                 mapperService.indexAnalyzer(), similarityService.similarity(mapperService), codecService, shardEventListener,

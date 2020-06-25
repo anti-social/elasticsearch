@@ -160,7 +160,7 @@ public class IdFieldMapper extends MetadataFieldMapper {
         }
 
         @Override
-        public IndexFieldData.Builder fielddataBuilder(String fullyQualifiedIndexName) {
+        public IndexFieldData.Builder fielddataBuilder(String fullyQualifiedIndexName, int shardId) {
             if (indexOptions() == IndexOptions.NONE) {
                 throw new IllegalArgumentException("Fielddata access on the _id field is disallowed");
             }

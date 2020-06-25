@@ -129,7 +129,8 @@ public abstract class AggregatorTestCase extends ESTestCase {
         SearchContext searchContext = createSearchContext(indexSearcher, indexSettings);
         CircuitBreakerService circuitBreakerService = new NoneCircuitBreakerService();
         IndexShard indexShard = mock(IndexShard.class);
-        when(indexShard.shardId()).thenReturn(new ShardId("test", "test", 0));
+        ShardId shardId = new ShardId("test", "test", 0);
+        when(indexShard.shardId()).thenReturn(shardId);
         when(searchContext.indexShard()).thenReturn(indexShard);
         when(searchContext.aggregations())
             .thenReturn(new SearchContextAggregations(AggregatorFactories.EMPTY, bucketConsumer));
@@ -147,9 +148,11 @@ public abstract class AggregatorTestCase extends ESTestCase {
             new IndicesFieldDataCache(Settings.EMPTY, new IndexFieldDataCache.Listener() {
             }), circuitBreakerService, mapperService);
         when(searchContext.getForField(Mockito.any(MappedFieldType.class)))
-            .thenAnswer(invocationOnMock -> ifds.getForField((MappedFieldType) invocationOnMock.getArguments()[0]));
+            .thenAnswer(invocationOnMock -> ifds.getForField((MappedFieldType) invocationOnMock.getArguments()[0], shardId.id()));
 
-        SearchLookup searchLookup = new SearchLookup(mapperService, ifds::getForField, new String[]{TYPE_NAME});
+        SearchLookup searchLookup = new SearchLookup(mapperService,
+            fieldType -> ifds.getForField(fieldType, shardId.id()),
+            new String[]{TYPE_NAME});
         when(searchContext.lookup()).thenReturn(searchLookup);
 
         QueryShardContext queryShardContext = queryShardContextMock(mapperService);
@@ -189,7 +192,7 @@ public abstract class AggregatorTestCase extends ESTestCase {
 
         for (MappedFieldType fieldType : new HashSet<>(fieldNameToType.values())) {
             when(queryShardContext.getForField(fieldType)).then(invocation ->
-                fieldType.fielddataBuilder(mapperService.getIndexSettings().getIndex().getName())
+                fieldType.fielddataBuilder(mapperService.getIndexSettings().getIndex().getName(), queryShardContext.getShardId())
                     .build(mapperService.getIndexSettings(), fieldType,
                         new IndexFieldDataCache.None(), circuitBreakerService, mapperService));
         }
