@@ -167,7 +167,7 @@ public class ClusterStateChanges extends AbstractComponent {
                     when(indexService.mapperService()).thenReturn(mapperService);
                     when(mapperService.docMappers(anyBoolean())).thenReturn(Collections.emptyList());
                     when(indexService.getIndexEventListener()).thenReturn(new IndexEventListener() {});
-                    when(indexService.getIndexSortSupplier()).thenReturn(() -> null);
+                    when(indexService.getIndexSortSupplier()).thenReturn((shardId) -> null);
                     return indexService;
             });
         } catch (IOException e) {

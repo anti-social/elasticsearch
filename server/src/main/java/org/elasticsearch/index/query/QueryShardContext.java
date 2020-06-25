@@ -79,7 +79,7 @@ public class QueryShardContext extends QueryRewriteContext {
     private final SimilarityService similarityService;
     private final BitsetFilterCache bitsetFilterCache;
     private final Function<IndexReaderContext, IndexSearcher> searcherFactory;
-    private final BiFunction<MappedFieldType, String, IndexFieldData<?>> indexFieldDataService;
+    private final IndexFieldDataLookup indexFieldDataService;
     private final int shardId;
     private final IndexReader reader;
     private final String clusterAlias;
@@ -102,9 +102,13 @@ public class QueryShardContext extends QueryRewriteContext {
     private NestedScope nestedScope;
     private boolean isFilter;
 
+    public interface IndexFieldDataLookup {
+        IndexFieldData<?> lookup(MappedFieldType fieldType, String fulllyQualifiedIndexName, int shardId);
+    }
+
     public QueryShardContext(int shardId, IndexSettings indexSettings, BitsetFilterCache bitsetFilterCache,
                              Function<IndexReaderContext, IndexSearcher> searcherFactory,
-                             BiFunction<MappedFieldType, String, IndexFieldData<?>> indexFieldDataLookup, MapperService mapperService,
+                             IndexFieldDataLookup indexFieldDataLookup, MapperService mapperService,
                              SimilarityService similarityService, ScriptService scriptService, NamedXContentRegistry xContentRegistry,
                              NamedWriteableRegistry namedWriteableRegistry, Client client, IndexReader reader, LongSupplier nowInMillis,
                              String clusterAlias) {
@@ -174,7 +178,7 @@ public class QueryShardContext extends QueryRewriteContext {
     }
 
     public <IFD extends IndexFieldData<?>> IFD getForField(MappedFieldType fieldType) {
-        return (IFD) indexFieldDataService.apply(fieldType, fullyQualifiedIndex.getName());
+        return (IFD) indexFieldDataService.lookup(fieldType, fullyQualifiedIndex.getName(), shardId);
     }
 
     public void addNamedQuery(String name, Query query) {
@@ -291,7 +295,7 @@ public class QueryShardContext extends QueryRewriteContext {
     public SearchLookup lookup() {
         if (lookup == null) {
             lookup = new SearchLookup(getMapperService(),
-                mappedFieldType -> indexFieldDataService.apply(mappedFieldType, fullyQualifiedIndex.getName()), types);
+                mappedFieldType -> indexFieldDataService.lookup(mappedFieldType, fullyQualifiedIndex.getName(), shardId), types);
         }
         return lookup;
     }

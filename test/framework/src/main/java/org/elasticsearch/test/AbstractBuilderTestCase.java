@@ -272,7 +272,7 @@ public abstract class AbstractBuilderTestCase extends ESTestCase {
 
             @Override
             public <IFD extends IndexFieldData<?>> IFD getForField(MappedFieldType fieldType) {
-                return serviceHolder.indexFieldDataService.getForField(fieldType); // need to build / parse inner hits sort fields
+                return serviceHolder.indexFieldDataService.getForField(fieldType, queryShardContext.getShardId()); // need to build / parse inner hits sort fields
             }
 
         };
