@@ -42,6 +42,7 @@ public class SearchLookup {
     private final SourceLookup sourceLookup;
     private final Function<String, MappedFieldType> fieldTypeLookup;
     private final BiFunction<MappedFieldType, Supplier<SearchLookup>, IndexFieldData<?>> fieldDataLookup;
+    private final int shardId;
 
     /**
      * Create the top level field lookup for a search request. Provides a way to look up fields from  doc_values,
@@ -49,10 +50,17 @@ public class SearchLookup {
      */
     public SearchLookup(Function<String, MappedFieldType> fieldTypeLookup,
                         BiFunction<MappedFieldType, Supplier<SearchLookup>, IndexFieldData<?>> fieldDataLookup) {
+        this(fieldTypeLookup, fieldDataLookup, -1);
+    }
+
+    public SearchLookup(Function<String, MappedFieldType> fieldTypeLookup,
+                        BiFunction<MappedFieldType, Supplier<SearchLookup>, IndexFieldData<?>> fieldDataLookup,
+                        int shardId) {
         this.fieldTypeLookup = fieldTypeLookup;
         this.fieldChain = Collections.emptySet();
         this.sourceLookup = new SourceLookup();
         this.fieldDataLookup = fieldDataLookup;
+        this.shardId = shardId;
     }
 
     /**
@@ -67,6 +75,7 @@ public class SearchLookup {
         this.sourceLookup = searchLookup.sourceLookup;
         this.fieldTypeLookup = searchLookup.fieldTypeLookup;
         this.fieldDataLookup = searchLookup.fieldDataLookup;
+        this.shardId = searchLookup.shardId;
     }
 
     /**
@@ -107,5 +116,12 @@ public class SearchLookup {
 
     public SourceLookup source() {
         return sourceLookup;
+    }
+
+    public int shardId() {
+        if (shardId < 0) {
+            throw new IllegalStateException("This search lookup is not aware about shard id");
+        }
+        return shardId;
     }
 }
